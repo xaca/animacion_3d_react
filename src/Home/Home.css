@@ -1,0 +1,44 @@
+.wrapper {
+    width: 600px;
+    display: flex;
+    border: 1px solid black;
+}
+
+.container {
+    width: 400px;
+    height: 200px;
+}
+
+.color1 {
+    background-color: chartreuse;
+}
+
+.color2 {
+    background-color: chocolate;
+}
+
+.color3 {
+    background-color: cornsilk;
+}
+
+/* Most common mobile devices in portrait mode */
+@media (max-width: 480px) {
+    .wrapper {
+        flex-direction: column;
+    }
+}
+
+/* Most common mobile devices in portrait mode */
+@media (min-width: 481px) and (max-width: 768px) {
+    .wrapper {
+        flex-direction: row;
+    }
+}
+
+/* Standard desktop screens and larger */
+@media (min-width:769px) {
+    .wrapper {
+        flex-direction: row;
+        margin: 0 auto;
+    }
+}

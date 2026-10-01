@@ -1,0 +1,72 @@
+[
+  {
+    "id": 1,
+    "name": "Grape Matcha",
+    "emoji": "🍇",
+    "description": "A bold fusion of deep purple grape and ceremonial grade matcha. Rich, antioxidant-packed, and beautifully layered.",
+    "price": 19.33
+  },
+  {
+    "id": 2,
+    "name": "Strawberry Matcha",
+    "emoji": "🍓",
+    "description": "Sweet sun-ripened strawberries meet the earthy depth of premium matcha for a refreshing, vibrant blend.",
+    "price": 18.50
+  },
+  {
+    "id": 3,
+    "name": "Mint Matcha",
+    "emoji": "🌿",
+    "description": "Crisp garden mint infused with smooth ceremonial matcha. Cool, energizing, and incredibly refreshing.",
+    "price": 17.80
+  },
+  {
+    "id": 4,
+    "name": "Blueberry Matcha",
+    "emoji": "🫐",
+    "description": "Wild blueberries bursting with flavor, balanced by the subtle umami of our signature matcha blend.",
+    "price": 20.10
+  },
+  {
+    "id": 5,
+    "name": "Classic Matcha",
+    "emoji": "🍵",
+    "description": "The original. Pure, ceremonial-grade matcha whisked to perfection. A timeless ritual for the discerning palate.",
+    "price": 15.99
+  },
+  {
+    "id": 6,
+    "name": "Cherry Matcha",
+    "emoji": "🍒",
+    "description": "Tart Japanese cherries harmonize with silky matcha for an elegant, subtly sweet seasonal creation.",
+    "price": 21.00
+  },
+  {
+    "id": 7,
+    "name": "Tea Leaf Blend",
+    "emoji": "🍃",
+    "description": "A curated blend of hand-picked tea leaves and premium matcha. Complex, layered, and deeply soothing.",
+    "price": 16.75
+  },
+  {
+    "id": 8,
+    "name": "Kiwi Matcha",
+    "emoji": "🥝",
+    "description": "Bright tropical kiwi meets the grassy notes of young matcha. Zesty, lively, and full of vitamin C.",
+    "price": 19.90
+  },
+  {
+    "id": 9,
+    "name": "Yuzu Matcha",
+    "emoji": "🍋",
+    "description": "Rare Japanese yuzu citrus lends a floral, tangy brightness to our smooth ceremonial matcha. Utterly unique.",
+    "price": 22.50
+  },
+  {
+    "id": 10,
+    "name": "Sakura Matcha",
+    "emoji": "🌸",
+    "description": "Cherry blossom petals delicately perfume our finest spring matcha harvest. Floral, rare, and enchanting.",
+    "price": 24.00
+  }
+]

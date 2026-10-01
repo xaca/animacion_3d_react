@@ -1,0 +1,187 @@
+@import "tailwindcss";
+
+/* ===== Matcha Theme Custom Styles ===== */
+
+@layer utilities {
+  .bg-dotted {
+    background-image: radial-gradient(circle, #c0c0c0 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+}
+
+@layer base {
+  @font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+  }
+}
+
+/* ===== Desktop Matcha Layout ===== */
+
+.matcha-bg {
+  background: linear-gradient(
+    180deg,
+    #4a5d23 0%,
+    #3d4f1e 30%,
+    #2e3d16 60%,
+    #1f2a0f 100%
+  );
+}
+
+.glass-container {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.floating-card {
+  background: white;
+  border-radius: 20px;
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.25),
+    0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+
+.floating-card:hover {
+  box-shadow:
+    0 15px 50px rgba(0, 0, 0, 0.35),
+    0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.matcha-title {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  color: #e8e4d4;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Price badge */
+.price-badge {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* ===== Product Info Modal — fixed, horizontal layout ===== */
+
+.product-modal-fixed {
+  position: fixed;
+  z-index: 9999;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: row;
+  width: 680px;
+  border-radius: 32px;
+  overflow: hidden;
+  background: rgba(38, 52, 19, 0.65);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12);
+  animation: modalIn 0.3s cubic-bezier(0.34, 1.46, 0.64, 1) forwards;
+  pointer-events: all;
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* Hovered card lift */
+.floating-card.is-active {
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 4px 16px rgba(0, 0, 0, 0.2);
+  z-index: 9997 !important;
+}
+
+/* LEFT panel — big emoji square */
+.product-modal-left {
+  flex: 0 0 250px;
+  height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.product-modal-emoji-lg {
+  font-size: 7.5rem;
+  line-height: 1;
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.45));
+}
+
+/* RIGHT panel — title, description, price */
+.product-modal-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 32px 28px 24px;
+  gap: 12px;
+}
+
+.product-modal-name {
+  font-family: 'Georgia', serif;
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.98);
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+}
+
+.product-modal-desc {
+  font-size: 0.98rem;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.65;
+  flex: 1;
+}
+
+.product-modal-price {
+  align-self: flex-end;
+  margin-top: 4px;
+  background: rgba(20, 20, 20, 0.65);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.product-modal-price:hover {
+  background: rgba(30, 30, 30, 0.85);
+  transform: scale(1.04);
+}
+
+.product-modal-price span:last-child {
+  font-size: 1.1rem;
+}
