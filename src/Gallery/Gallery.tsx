@@ -238,7 +238,7 @@ export default function Gallery() {
             isPointerDown = false;
         };
 
-        const onClick = (e: MouseEvent) => {
+        const onClick = () => {
             // Prevent click if user was dragging the carousel
             if (isDragging) return;
 

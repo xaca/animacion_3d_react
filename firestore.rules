@@ -1,0 +1,23 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Jeopardy rooms: rooms/{code}, where code is 4 capital letters (see roomService.ts).
+    // There is no login, so anyone with the code can play in the room.
+    match /rooms/{code} {
+      allow read, delete: if true;
+      allow create: if code.matches('^[A-Z]{4}$') && isRoom(request.resource.data) && request.resource.data.code == code;
+      allow update: if isRoom(request.resource.data) && request.resource.data.code == code;
+    }
+
+    // Everything else is closed
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isRoom(data) {
+      return data.keys().hasOnly(['code', 'status', 'teams', 'board', 'activeTile', 'answers', 'players'])
+        && data.status in ['lobby', 'board', 'question', 'end'];
+    }
+  }
+}
