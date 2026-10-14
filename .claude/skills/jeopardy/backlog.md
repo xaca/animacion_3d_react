@@ -23,6 +23,17 @@ teams, countdown, podium). Roughly ordered by value for a classroom.
 - Reading time (0/5/10/15 s, default 10, set in Setup): the question is shown alone first, then the options appear and the answer timer starts; host can "Show options now". Requested by the players.
 - Fairness fix after a class incident (phones on a cached old bundle answered during the reading time): `index.html` served `no-cache`; rooms store the build `version` and stale devices reload once; the options are revealed by the host screen's `showOptions` (Firestore push), not by each phone's clock.
 - Host PIN (1041, stored as SHA-256 hash in `hostAuth.ts`) on `/host` and `/host/CODE`, remembered per device until "Log out".
+- New scoring (fairness): every team answers once, every correct team scores at the reveal; the host screen is the only clock; phones' bars are local durations. Replaces "first correct team wins".
+- Topic name on board/phone headers. Java, C#, JavaScript rewritten with language-prefixed categories and 3 questions per level (75 each). New topics: Artificial Intelligence, UX/UI Design (50 each). 10 topics / 575 questions.
+- Board UX: score panel on the left, board fits the screen without scrolling, +/− score buttons removed, phones show only their team's score and place.
+- Score sidebar rebuilt (shadcn Sidebar as reference, GSAP only): expanded / icon rail / hidden, Ctrl/⌘+B and S shortcuts, inset board, animated width, re-rank slide, score count-up with "+N" badge, answer pulse, sliding results toast.
+- Test players (bots) answered by the host screen, to try the game with a single phone.
+- Question screen rebuilt (`HostQuestionView`): fits one viewport with auto-shrinking text (`useFitText`), top-bar countdowns, bottom bar with one main action (yellow Next/Finish, Enter/→ shortcut, questions-left counter), ⭐ Final question badge, GameOverSplash + animated podium with confetti. Sidebar scrollbar removed (compact rows from 6 teams). +/- hint gone.
+
+## Ideas parked (decided against for now)
+
+- Speed bonus for the fastest correct team, measured as reaction time on each phone (from options shown to tap). Fair across network delay but trusts the phone; could be an option in Setup.
+- Penalty for wrong answers (e.g. −half value) to discourage guessing.
 
 ## Known issues
 
@@ -31,7 +42,7 @@ teams, countdown, podium). Roughly ordered by value for a classroom.
 2. **Anyone with the room code can control the room** by calling the Firestore API directly (the host PIN only gates the UI; rules can't tell host writes from player writes).
    *Fix idea:* Firebase anonymous auth; store `hostUid` and check it in the rules for host-only actions.
 3. **Duplicate player names are allowed** in the same room.
-4. **Host tab must stay open for the timeout reveal** — `Countdown`'s `onDone` runs on the host screen; answers are still locked server-side after `questionEndsAt`, but nothing flips `revealed` if the host tab is gone.
+4. **Host tab must stay open** — it is the game's clock: it reveals the options, closes each question and starts the game. If it's closed mid-question, the question stays open until it's reopened.
 5. **Local mode is stale**: hidden, still uses the old `BANK` in `questions.ts`, no topics/timer/podium wiring beyond `EndScreen`. Either re-wire it to Firestore questions or delete it (and `BANK`).
 
 ## Gameplay ideas

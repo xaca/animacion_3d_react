@@ -6,8 +6,8 @@ description: Everything about the "Do you know your English?" Jeopardy game in s
 # Jeopardy game ("Do you know your English?")
 
 A classroom quiz game. The host shows the board on a big screen; players answer
-multiple-choice questions on their phones. Topics: Java, C#, JavaScript, HTML & CSS,
-OOP (language-agnostic), pop culture, English A1 and B1. Live at **https://jeopardy-76b82.web.app**.
+multiple-choice questions on their phones. Topics: Java, C#, JavaScript (75 questions each),
+HTML & CSS, OOP (language-agnostic), AI, UX/UI, pop culture, English A1 and B1 (50 each). Live at **https://jeopardy-76b82.web.app**.
 
 This repo (`react_test`) is a lab of class examples; `src/App.tsx` currently renders only `<Jeopardy />`.
 Stack: React 19 + TypeScript (strict, `noUnusedLocals`) + Vite + Tailwind 4 + Firebase 13 (Firestore + Hosting).
@@ -37,21 +37,26 @@ Routing is hand-written in `src/Jeopardy/Jeopardy.tsx` (no router library): `vie
 | `questions.ts` | `Tile`/`Category` types, `shuffle`, `pickOne`, `markUsed`, `allUsed`, `LETTERS`, `VALUES`; plus the legacy `BANK` + `buildBoard()` used only by the hidden local mode |
 | `questionService.ts` | `loadQuestions(topic)` (Firestore `questions` query) and `buildBoardFrom(questions)` (5 categories × 5 values, options shuffled) |
 | `topics.ts` | `TOPICS`: id/name/tagline cards for the lobby (ids must match `content/`) |
-| `content/` | Source of all questions (`java.ts`, `csharp.ts`, `javascript.ts`, `htmlCss.ts`, `oop.ts`, `popCulture.ts`, `englishA1.ts`, `englishB1.ts`, `index.ts`, `types.ts`). Uploaded by the seed script; **never imported by the app** so answers stay out of the bundle |
+| `content/` | Source of all questions (`java.ts`, `csharp.ts`, `javascript.ts`, `htmlCss.ts`, `oop.ts`, `ai.ts`, `uxUi.ts`, `popCulture.ts`, `englishA1.ts`, `englishB1.ts`, `index.ts`, `types.ts`). Uploaded by the seed script; **never imported by the app** so answers stay out of the bundle |
 | `teams.ts` | `Team` type (`id`, `name`, `score`, `color?`), `makeTeams(n)` (local mode only), `rankTeams` (competition ranking for the podium) |
 | `teamNames.ts` | `TEAM_NAMES` pool (16 color + animal names, e.g. "Red Fox", each with a hex color) and `pickTeamNames(n, taken)` |
 | `Board.tsx` | Category × value grid |
-| `QuestionModal.tsx` | Question + optional `code` snippet + A–D options + reveal; props `revealed`, `onReveal`, `timer`, `optionsHidden` (reading time), `closeLabel`, `hint`, `children` |
-| `Countdown.tsx` | Seconds + shrinking bar to an epoch deadline; optional `label`; `onDone` fires once (host uses it to auto-reveal / start the game; both screens use it to end the reading time) |
-| `Podium.tsx` | 2nd–1st–3rd blocks, ties share a step, 4th+ listed below; `EndScreen.tsx` wraps it with "Play again" |
-| `TeamScores.tsx` | Score cards with optional +/− buttons |
+| `QuestionModal.tsx` | **Local mode only** now: question + options + reveal (multiplayer host uses `HostQuestionView`) |
+| `useFitText.ts` | `useFitText(max, min, deps)`: shrinks the font until the content fits its box (bounded flex/grid child + overflow-hidden); reruns on resize |
+| `GameOverSplash.tsx` | Full-screen "🏁 Game over!" GSAP moment between the last question and the podium (host + phones), `onDone` when finished |
+| `Countdown.tsx` | Default `Countdown`: bar to an epoch deadline on this device's clock (host only; `onDone` fires once → showOptions / reveal / start). `LocalCountdown`: runs N seconds from mount (phones; never compares clocks) |
+| `Podium.tsx` | 2nd–1st–3rd blocks, ties share a step, 4th+ listed below; GSAP: steps rise 3rd→2nd→1st, confetti burst on the winner; `EndScreen.tsx` wraps it with "Play again" |
+| `TeamScores.tsx` | Score cards with optional +/− buttons (local mode only) |
+| `multiplayer/ScorePanel.tsx`, `panelMode.ts` | Host score sidebar (shadcn-Sidebar-inspired layout, plain Tailwind + **GSAP**, no shadcn). States `expanded` (280 px: topic, room, ranked rows with initials avatar, members, score) / `rail` (72 px: avatars + score, CSS tooltip) / `hidden` (only a "Scores ›" tab; `ResultToast` slides results in for 3 s). Remembered in `localStorage["jeopardy-score-panel"]`; **S** cycles, **Ctrl/⌘+B** toggles expanded↔rail; narrow windows default to rail. GSAP: width tween with content swapped only while it fits, staggered fade-in, FLIP re-rank slide (plain tweens), score count-up + "+N" badge, ring pulse on answer. `MOTION` = 0 under prefers-reduced-motion |
+| `multiplayer/useBots.ts` | Test players: host screen answers for every `bot` player once the options show (random choice ~50% correct, random time within 80% of the answer time) via the normal `answer()` |
 | `LocalGame.tsx`, `SetupScreen.tsx` | One-screen mode (hidden; still uses the legacy BANK) |
-| `multiplayer/roomService.ts` | **All Firestore room access.** Types `Room`, `Player`, `Answer`; host/player actions; helpers `activeTileOf`, `winnerOf`, `nobodyGotIt`, `teamAnswerOf`, `startProblem` |
+| `multiplayer/roomService.ts` | **All Firestore room access.** Types `Room`, `Player`, `Answer`; host/player actions; helpers `activeTileOf`, `optionsVisible`, `answerOf`, `answerProgress`, `allTeamsAnswered`, `tilesLeft`, `isLastTile`, `startProblem` |
 | `multiplayer/useRoom.ts` | `useRoom(code)` → `undefined` loading, `null` missing/error, else `Room` (live via `onSnapshot`). Reloads the page once if the room was hosted by a newer build (`room.version` > `APP_VERSION`) |
 | `multiplayer/hostAuth.ts`, `HostLogin.tsx` | Host PIN gate: SHA-256 hash of the PIN in `hostAuth.ts` (currently the hash of **1041**), unlock remembered in `localStorage["jeopardy-host"]` until "Log out" (Setup). Deterrent only: runs in the browser |
 | `multiplayer/HostSetup.tsx` | Host-only config (status `setup`, code hidden): topic cards, Timer / Teams / Max per team / Start countdown selects, team-name chips + "🎲 New names", **Open room** |
 | `multiplayer/HostLobby.tsx` | Waiting room (status `lobby`): QR + URL + code, settings summary, team cards, Start game → last-call countdown with Start now / Cancel, Settings (back to setup), Close room |
-| `multiplayer/HostGame.tsx` | Routes by status (`HostSetup` / `HostLobby` / board / `EndScreen`); `HostQuestion` (keyed per tile: reading countdown + "Show options now", then answer countdown); `AnswerList` shows ✔/✘ and the winner |
+| `multiplayer/HostGame.tsx` | Routes by status (`HostSetup` / `HostLobby` / question / board / `GameOverSplash` → `EndScreen`); `h-dvh` layout, sidebar + inset board, `ResultToast` |
+| `multiplayer/HostQuestionView.tsx` | Host question screen (keyed per tile), one viewport, no scrolling: top bar (category · value, ⭐ Final question badge, compact countdowns), auto-fitting question/code (`useFitText`, em-based children), 2×2 options grid, bottom bar (status left; one main action right: "Show options now" → "Show answer" → yellow "Next question →" / "🏆 See final results" + questions-left counter). **Enter / →** presses the main button (busy ref swallows doubles). Holds the clock logic: reading/answer countdowns, 1 s close grace, auto-reveal when all answered, `useBots` |
 | `multiplayer/JoinQr.tsx` | Canvas QR for `${origin}/join?code=ABCD` (package `qrcode`) |
 | `multiplayer/PlayerGame.tsx` | Phone: `TeamPicker` (pick one of the host's teams; shows the start countdown), `AnswerPicker` (options + countdown + result) |
 | `multiplayer/JoinScreen.tsx`, `HomeScreen.tsx`, `ui.tsx` | Join form (code prefilled from the QR link, still editable), home, shared Tailwind classes (`primaryButton`, `linkButton`, `input`, `Screen`, `Message`) |
@@ -80,10 +85,10 @@ Room = {
   startsAt: number | null,       // epoch ms; start countdown running when set (lobby only)
   board: { name, tiles: { question, code?, answer, options[4], value, used }[] }[], // [] until startGame
   activeTile: { col, row } | null,
-  readEndsAt: number | null,     // epoch ms, set by openTile (now + readSeconds); display only
+  readEndsAt: number | null,     // epoch ms on the HOST's clock; drives only the host's reading countdown
   optionsAt: number | null,      // null during the reading time (options hidden, answers rejected); set by the host screen's showOptions
-  questionEndsAt: number | null, // epoch ms = optionsAt + timerSeconds; answers after it are ignored
-  revealed: boolean,             // answer shown to all + answers locked
+  questionEndsAt: number | null, // epoch ms on the HOST's clock; drives only the host's answer countdown (never checked by answer())
+  revealed: boolean,             // question closed: answers locked, correct option shown, points given
   answers: { playerId, name, team, choice, correct, at }[],   // current question only
   players: Record<id, { id, name, team: string | null }>,     // team = Team id
 }
@@ -91,7 +96,7 @@ Room = {
 
 Status flow: `setup` → `openRoom` → `lobby` (⇄ `backToSetup`) → `startCountdown` → `startGame` (loads questions, builds board, keeps only teams with players) → `board` ⇄ (`openTile` → `question` → `closeTile`) → `end` when every tile is used → `backToLobby`.
 
-Every room write goes through `mutate(code, room => newRoom)`, which runs a **Firestore transaction** and `tx.set`s the whole document. That's what guarantees "two correct answers at once → exactly one winner". Keep using `mutate` for new actions.
+Every room write goes through `mutate(code, room => newRoom)`, which runs a **Firestore transaction** and `tx.set`s the whole document. That's what guarantees one answer per team when teammates tap together, and points given exactly once when two reveals race. Keep using `mutate` for new actions.
 
 ## Game rules (decided with the user)
 
@@ -101,9 +106,13 @@ Every room write goes through `mutate(code, room => newRoom)`, which runs a **Fi
 - Host picks category + value; the question (and `code` snippet) appears **alone** on the big screen and phones for the **reading time** ("Options in N s"). When the host screen's countdown ends (or "Show options now"), `showOptions` sets `optionsAt` and the options appear on every device at once — no phone clock involved — and the **answer countdown** starts. `answer()` rejects taps while `optionsAt` is null. With reading time 0 the options show immediately.
 - **Host PIN**: `/host` and `/host/CODE` show `HostLogin` until the PIN is entered; remembered on the device until "Log out". Players never see it.
 - **Same build for everyone**: `createRoom` stores `APP_VERSION`; a device on an older build reloads itself once when it opens the room (`useRoom`). `index.html` is served `no-cache` so a reload always gets the latest build. After a deploy: host a **new** room; old phones update when they join.
-- **One try per TEAM**: whoever taps first answers for the whole team. Wrong = no penalty, team locked out for that question.
-- **First correct answer wins**: tile value added to the team automatically inside `answer()`.
-- Question ends on: winner, every team answered wrong (`nobodyGotIt`), countdown reaches zero (host screen auto-calls `revealAnswer`), or host clicks "Show answer" (also `revealAnswer`). All of these **lock further answers**; host then clicks **Next question**. +/− buttons remain for manual fixes.
+- **Every team answers, once**: whoever on the team taps first answers for the whole team (`answer()` records right or wrong, no points yet). Teams don't race each other.
+- **Every correct team scores** the tile value, given inside `revealAnswer` (once, even if called twice). Wrong or no answer = 0.
+- **The host screen is the only clock** (fairness decision after the clock-skew problems): it calls `showOptions` when its reading countdown ends and `revealAnswer` when its answer countdown ends **+ 1 s grace** (`CLOSE_GRACE_MS`), as soon as `allTeamsAnswered`, or on "Show answer". `answer()` checks only `optionsAt !== null && !revealed` — never a clock. Phones show bars with `LocalCountdown`, which runs N seconds from when the update reached that phone.
+- Before the reveal the big screen shows "N/M teams answered" and which teams answered (not what); phones show their own team's pending choice. After it, the score panel shows each team's +value / ✘ / —, the question shows who got it, phones show their team's result. Host then clicks **Next question**. No manual +/− score buttons (removed at the user's request).
+- Host game screen is one viewport (`h-dvh`), **nothing scrolls**: sidebar (compact rows from 6 teams, no list scrollbar) + board whose rows stretch + `HostQuestionView` with auto-fitting text. Phones show a single "Your team: 800 · 2nd of 3" line instead of all teams' scores.
+- **Last question**: ⭐ badge on host and phones while it's open; after its reveal the main button reads "🏆 See final results". Closing it → `GameOverSplash` on every screen, then podium (animated rise + confetti); phones add "Your team finished 2nd of 3!".
+- Topic name is shown in the host board header and in the phones' question header. Programming topics use language-prefixed category names (Java…, C#…, JS…) so boards can't be confused.
 - Players can join mid-game and pick any team that isn't full; the team count and names can only change before the game (setup or lobby). Teams never vanish on their own (only empty ones at start).
 - Game over → podium (host: with member names; phones: compact).
 
@@ -118,6 +127,8 @@ Every room write goes through `mutate(code, room => newRoom)`, which runs a **Fi
 
 **Run locally:** `npm run dev` → http://localhost:5173. Use separate tabs (or a phone on the same network with `npm run dev -- --host`) as players.
 
+**Test alone (one phone):** host a room, in the waiting room click "🧪 Add test player" (`addBot`: "🤖 Bot N" on the emptiest team; `removeBots` clears them), join from your phone on another team, play. The host tab must stay open: it answers for the bots.
+
 **Add or edit questions:** edit the topic file in `src/Jeopardy/content/`. Each category needs 5 levels × ≥2 questions; wrong options plausible for the audience. Then **seed** (below) and run `npm run test:jeopardy`.
 
 **Add a topic:** new file in `content/` (5 categories × 5 levels × ≥2), register it in `content/index.ts` **and** `topics.ts`, seed, test.
@@ -129,14 +140,15 @@ Every room write goes through `mutate(code, room => newRoom)`, which runs a **Fi
 
 **Add a field to `Room`:** update the type and every place that creates/resets the room in `roomService.ts`, **and add the key to `isRoom()` in `firestore.rules`** — otherwise every write fails with "Missing or insufficient permissions". Deploy with `npm run deploy:all`.
 
-**Test:** `npm run test:jeopardy` — validates all content offline, checks the seeded collection, then plays a real round against live Firestore with 6 fake players (room version, setup blocks joins, team count / max / start countdown / reroll, full-team rule, empty teams dropped at start, reading time lock + showOptions, one-try-per-team, simultaneous winners, reveal lock, countdown lock; throwaway room, deleted at the end). Script: [scripts/round-test.ts](scripts/round-test.ts). Exit code 1 on failure. Takes ~1 min; sandbox network flakes (`ENETUNREACH`) can kill the live part — just rerun.
+**Test:** `npm run test:jeopardy` — validates all content offline, checks the seeded collection, then plays a real round against live Firestore with 6 fake players (room version, setup blocks joins, team count / max / start countdown / reroll, full-team rule, empty teams dropped at start, reading time lock + showOptions, one answer per team, every correct team scores once at the reveal, reveal locks answers, simultaneous winners, reveal lock, countdown lock; throwaway room, deleted at the end). Script: [scripts/round-test.ts](scripts/round-test.ts). Exit code 1 on failure. Takes ~1 min; sandbox network flakes (`ENETUNREACH`) can kill the live part — just rerun.
 
 **Deploy:** `npm run deploy` (build + Hosting only) or `npm run deploy:all` (also Firestore rules and indexes). Build runs `tsc -b` first, so any unused import anywhere in `src/` blocks deployment.
 
 ## Gotchas
 
 - Changing the `Room` shape breaks rooms created before the change. Tell the user to host a new room.
-- The countdown compares `questionEndsAt` with each device's clock; a phone with a very wrong clock sees a wrong countdown (accepted for a classroom).
+- **Never compare a room timestamp with a phone's `Date.now()`**: phone clocks can be seconds off (it made bars end early and taps get rejected in class). Room timestamps come from the host's clock and are read only by the host screen; phones use `LocalCountdown`.
+- Answer options are compared case-insensitively and trimmed by the validator, so "JAVA"/"java" or "World"/" World" count as duplicates.
 - `Countdown`'s auto-reveal only runs while the host screen is open; if the host closes the tab mid-question, time never "runs out" server-side (answers are still ignored after `questionEndsAt`). Same for the start countdown (`startGame`) and the reading time (`showOptions`): both are called by the host screen's `Countdown.onDone`. If the host tab is closed during a reading time, the options never appear until it's reopened.
 - Game rules run in the **players'** JavaScript (the Firestore transaction executes client-side), so a phone on an old bundle plays by the old rules. That's why rooms carry `version` and stale devices reload.
 - Changing the PIN: put the SHA-256 hex of the new PIN in `hostAuth.ts` (command in the file's comment) and deploy.
@@ -144,6 +156,7 @@ Every room write goes through `mutate(code, room => newRoom)`, which runs a **Fi
 - The correct answer is inside the room document, so a player inspecting network traffic could find it. Accepted for a classroom; hiding it needs Cloud Functions (paid Blaze plan).
 - ESLint `react-refresh/only-export-components`: don't export constants from component files (that's why `LETTERS` is in `questions.ts` and `rankTeams` in `teams.ts`).
 - ESLint `react-hooks/refs`: don't write `ref.current` during render; copy props into a ref inside an effect (see `Countdown.tsx`).
+- GSAP + React: never let GSAP write text React also renders (it replaces React's text node and later updates are lost). The sidebar's score `<span>` is rendered empty and only its layout effect writes `textContent`. Kill timelines in effect cleanups (`tl.kill()`), not `ctx.revert()`, which snaps widths back. The user prefers plain GSAP (no `@gsap/react`, no Playwright).
 - In the Bash tool, heredocs containing apostrophes (lots of them in the questions) can break; write files with the Write/Edit tools.
 - Code style: 4-space indent, double quotes, semicolons, Tailwind classes inline, colors `#2a3698` (blue) and `yellow-300` (highlight). Comments are short and explain *why*.
 

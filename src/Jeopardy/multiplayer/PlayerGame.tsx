@@ -1,8 +1,11 @@
-import Countdown from "../Countdown";
+import { useState } from "react";
+import { LocalCountdown } from "../Countdown";
+import GameOverSplash from "../GameOverSplash";
 import Podium from "../Podium";
-import TeamScores from "../TeamScores";
 import { LETTERS } from "../questions";
-import { activeTileOf, answer, chooseTeam, leaveRoom, nobodyGotIt, optionsVisible, teamAnswerOf, winnerOf, type Player, type Room } from "./roomService";
+import { rankTeams } from "../teams";
+import { TOPICS } from "../topics";
+import { activeTileOf, answer, answerOf, answerProgress, chooseTeam, isLastTile, leaveRoom, optionsVisible, type Player, type Room } from "./roomService";
 import { linkButton, Message, Screen } from "./ui";
 import { useRoom } from "./useRoom";
 
@@ -39,6 +42,8 @@ export default function PlayerGame({ code, playerId, onExit }: Props) {
                 <span className="tracking-widest">Room {room.code}</span>
             </header>
 
+            {hasTeam && (room.status === "board" || room.status === "question") && <MyScore room={room} teamId={myTeam.id} />}
+
             {room.status === "setup" ? (
                 <p className="text-3xl font-bold">The host is changing the settings… hang on.</p>
             ) : !hasTeam || room.status === "lobby" ? (
@@ -46,20 +51,48 @@ export default function PlayerGame({ code, playerId, onExit }: Props) {
             ) : room.status === "question" && room.activeTile ? (
                 <AnswerPicker key={`${room.activeTile.col}-${room.activeTile.row}`} room={room} player={player} />
             ) : room.status === "end" ? (
-                <>
-                    <p className="text-4xl font-bold">Game over!</p>
-                    <Podium teams={room.teams} />
-                </>
+                <PlayerEnd room={room} player={player} />
             ) : (
                 <p className="text-3xl font-bold">Look at the big screen. Waiting for a question…</p>
             )}
-
-            {room.status !== "lobby" && room.status !== "end" && <TeamScores teams={room.teams} />}
 
             <button className={linkButton} onClick={leave}>
                 Leave game
             </button>
         </Screen>
+    );
+}
+
+const ordinal = (n: number) => `${n}${n % 10 === 1 && n % 100 !== 11 ? "st" : n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th"}`;
+
+// "Game over!" splash first, then the podium with the player's own place called out
+function PlayerEnd({ room, player }: { room: Room; player: Player }) {
+    const [splashDone, setSplashDone] = useState(false);
+    if (!splashDone) return <GameOverSplash onDone={() => setSplashDone(true)} />;
+    const ranked = rankTeams(room.teams);
+    const mine = ranked.find((r) => r.team.id === player.team);
+    return (
+        <>
+            <p className="text-4xl font-bold">Game over!</p>
+            {mine && (
+                <p className="text-2xl font-bold text-yellow-300">
+                    Your team finished {ordinal(mine.place)} of {ranked.length}!
+                </p>
+            )}
+            <Podium teams={room.teams} />
+        </>
+    );
+}
+
+// One line instead of every team's card, so the phone never needs to scroll
+function MyScore({ room, teamId }: { room: Room; teamId: string }) {
+    const ranked = rankTeams(room.teams);
+    const mine = ranked.find((r) => r.team.id === teamId);
+    if (!mine) return null;
+    return (
+        <p className="w-full max-w-md bg-white text-black text-xl px-3 py-2 border-l-8 text-left" style={{ borderLeftColor: mine.team.color }}>
+            Your team: <b>{mine.team.score}</b> · {ordinal(mine.place)} of {ranked.length}
+        </p>
     );
 }
 
@@ -103,7 +136,7 @@ function TeamPicker({ room, player }: { room: Room; player: Player }) {
                     <p className={`text-2xl font-bold ${player.team === null ? "text-yellow-300" : ""}`}>
                         {player.team === null ? "Pick a team now or you'll be left out!" : "Game starts soon…"}
                     </p>
-                    <Countdown endsAt={room.startsAt} totalSeconds={room.startSeconds} />
+                    <LocalCountdown key={room.startsAt} seconds={room.startSeconds} />
                 </div>
             ) : (
                 player.team !== null && room.status === "lobby" && <p className="text-xl opacity-80">Waiting for the host to start…</p>
@@ -116,85 +149,86 @@ function AnswerPicker({ room, player }: { room: Room; player: Player }) {
     const tile = activeTileOf(room);
     if (!tile || !room.activeTile) return null;
 
-    const mine = room.answers.find((a) => a.playerId === player.id);
-    // One try per team: a teammate's answer locks the question for you too
-    const teamAnswer = teamAnswerOf(room, player);
-    const winner = winnerOf(room);
-    // revealed: the host showed the answer (or time ran out), so the question is over
-    const done = winner !== null || nobodyGotIt(room) || room.revealed;
+    // One answer per team: whoever taps first answers for everyone on it
+    const teamAnswer = answerOf(room, player.team);
+    const done = room.revealed;
     // Reading time: question only. The host screen reveals the options for everyone at once.
     const reading = !optionsVisible(room) && !done;
-    const teamName = (team: string | null) => room.teams.find((t) => t.id === team)?.name ?? "no team";
+    const { answered, total } = answerProgress(room);
+    const topic = TOPICS.find((t) => t.id === room.topic)?.name ?? room.topic;
 
     return (
         <>
             <div>
-                <p className="text-xl opacity-80">
-                    {room.board[room.activeTile.col].name} — {tile.value}
+                <p className="text-lg opacity-80">
+                    {topic} — {room.board[room.activeTile.col].name} — {tile.value}
+                    {isLastTile(room) && (
+                        <span className="ml-2 bg-yellow-300 text-black font-bold text-sm px-2 py-0.5 rounded align-middle">⭐ Final question</span>
+                    )}
                 </p>
                 <p className="text-2xl font-bold">{tile.question}</p>
                 {tile.code && <pre className="bg-black/40 text-left text-base px-3 py-2 mt-2 overflow-x-auto">{tile.code}</pre>}
             </div>
 
+            {/* Bars start when this phone receives the update, so a wrong clock can't shorten them */}
             {reading ? (
                 <>
-                    {room.readEndsAt !== null && <Countdown endsAt={room.readEndsAt} totalSeconds={room.readSeconds} label="Options in" />}
+                    <LocalCountdown key="read" seconds={room.readSeconds} label="Options in" />
                     <p className="text-xl opacity-80">Read the question and get ready…</p>
                 </>
             ) : (
-                !done && room.questionEndsAt !== null && <Countdown endsAt={room.questionEndsAt} totalSeconds={room.timerSeconds} />
+                !done && <LocalCountdown key="answer" seconds={room.timerSeconds} />
             )}
 
             {!reading && (
-            <div className="grid gap-3 w-full max-w-md">
-                {tile.options.map((option, i) => {
-                    const picked = mine?.choice === option;
-                    const isAnswer = done && option === tile.answer;
-                    return (
-                        <button
-                            key={option}
-                            onClick={() => answer(room.code, player.id, option)}
-                            disabled={!!teamAnswer || done}
-                            className={`text-2xl font-bold py-4 px-3 text-left border-4 cursor-pointer disabled:cursor-not-allowed ${
-                                isAnswer
-                                    ? "bg-yellow-300 text-black border-black"
-                                    : picked
-                                      ? "bg-red-600 text-white border-black"
-                                      : `bg-white text-[#2a3698] border-transparent ${teamAnswer || done ? "opacity-50" : "hover:bg-yellow-300"}`
-                            }`}
-                        >
-                            <span className="mr-3">{LETTERS[i]}</span>
-                            {option}
-                        </button>
-                    );
-                })}
-            </div>
+                <div className="grid gap-3 w-full max-w-md">
+                    {tile.options.map((option, i) => {
+                        const ours = teamAnswer?.choice === option;
+                        const isAnswer = done && option === tile.answer;
+                        return (
+                            <button
+                                key={option}
+                                onClick={() => answer(room.code, player.id, option)}
+                                disabled={!!teamAnswer || done}
+                                className={`text-2xl font-bold py-4 px-3 text-left border-4 cursor-pointer disabled:cursor-not-allowed ${
+                                    isAnswer
+                                        ? "bg-yellow-300 text-black border-black"
+                                        : ours && done
+                                          ? "bg-red-600 text-white border-black"
+                                          : ours
+                                            ? "bg-white text-[#2a3698] border-black"
+                                            : `bg-white text-[#2a3698] border-transparent ${teamAnswer || done ? "opacity-50" : "hover:bg-yellow-300"}`
+                                }`}
+                            >
+                                <span className="mr-3">{LETTERS[i]}</span>
+                                {option}
+                            </button>
+                        );
+                    })}
+                </div>
             )}
 
-            {reading ? null : winner ? (
+            {reading ? null : done ? (
                 <p className="text-2xl">
-                    {winner.playerId === player.id ? (
-                        <b className="text-yellow-300">Correct! +{tile.value} for {teamName(winner.team)}</b>
+                    {!teamAnswer ? (
+                        "Your team didn't answer in time."
+                    ) : teamAnswer.correct ? (
+                        <b className="text-yellow-300">Correct! +{tile.value} for your team</b>
                     ) : (
-                        <>
-                            <b>{winner.name}</b> ({teamName(winner.team)}) got it first.
-                        </>
+                        "Wrong answer, no points this time."
                     )}
                     <br />
                     Waiting for the next question…
                 </p>
-            ) : nobodyGotIt(room) ? (
-                <p className="text-2xl">Nobody got it. Waiting for the next question…</p>
-            ) : room.revealed ? (
-                <p className="text-2xl">Time's up! Waiting for the next question…</p>
-            ) : mine ? (
-                <p className="text-2xl">Wrong answer. Waiting for the other teams…</p>
             ) : teamAnswer ? (
                 <p className="text-2xl">
-                    <b>{teamAnswer.name}</b> answered for your team. Waiting for the other teams…
+                    {teamAnswer.playerId === player.id ? "You" : <b>{teamAnswer.name}</b>} answered{" "}
+                    <b>{LETTERS[tile.options.indexOf(teamAnswer.choice)]}</b> for your team. Waiting for the other teams… ({answered}/{total})
                 </p>
             ) : (
-                <p className="text-xl opacity-80">Answer for your team: the first correct team wins the points!</p>
+                <p className="text-xl opacity-80">
+                    Answer for your team. Every team that gets it right scores — no need to rush, just be right!
+                </p>
             )}
         </>
     );

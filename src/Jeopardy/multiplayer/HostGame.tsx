@@ -1,25 +1,16 @@
+import gsap from "gsap";
+import { useLayoutEffect, useRef, useState } from "react";
 import Board from "../Board";
-import Countdown from "../Countdown";
 import EndScreen from "../EndScreen";
-import QuestionModal from "../QuestionModal";
-import TeamScores from "../TeamScores";
+import GameOverSplash from "../GameOverSplash";
+import { TOPICS } from "../topics";
 import HostLobby from "./HostLobby";
+import HostQuestionView from "./HostQuestionView";
 import HostSetup from "./HostSetup";
-import {
-    activeTileOf,
-    backToLobby,
-    changeScore,
-    closeTile,
-    deleteRoom,
-    nobodyGotIt,
-    openTile,
-    optionsVisible,
-    revealAnswer,
-    showOptions,
-    winnerOf,
-    type Room,
-} from "./roomService";
-import { linkButton, Message } from "./ui";
+import ScorePanel from "./ScorePanel";
+import { MOTION, usePanelMode } from "./panelMode";
+import { backToLobby, deleteRoom, openTile, type Room } from "./roomService";
+import { Message } from "./ui";
 import { useRoom } from "./useRoom";
 
 type Props = {
@@ -30,6 +21,17 @@ type Props = {
 
 export default function HostGame({ code, onExit, onLogout }: Props) {
     const room = useRoom(code);
+    const [panelMode, setPanelMode] = usePanelMode();
+
+    // "Game over!" splash shown once when the game ends; rearmed when the status changes
+    // (adjust-state-during-render pattern, see react.dev "You might not need an effect")
+    const [splashDone, setSplashDone] = useState(false);
+    const status = room ? room.status : null;
+    const [prevStatus, setPrevStatus] = useState(status);
+    if (status !== prevStatus) {
+        setPrevStatus(status);
+        if (status !== "end") setSplashDone(false);
+    }
 
     if (room === undefined) return <Message text="Loading…" />;
     if (room === null) return <Message text="This room no longer exists." onBack={onExit} />;
@@ -42,6 +44,7 @@ export default function HostGame({ code, onExit, onLogout }: Props) {
     if (room.status === "setup") return <HostSetup room={room} onExit={closeRoom} onLogout={onLogout} />;
     if (room.status === "lobby") return <HostLobby room={room} onExit={closeRoom} />;
     if (room.status === "end") {
+        if (!splashDone) return <GameOverSplash onDone={() => setSplashDone(true)} />;
         const members = (i: number) =>
             Object.values(room.players)
                 .filter((p) => p.team === room.teams[i].id)
@@ -51,88 +54,68 @@ export default function HostGame({ code, onExit, onLogout }: Props) {
 
     const active = room.activeTile;
     const activeTile = active ? room.board[active.col].tiles[active.row] : null;
+    const topic = TOPICS.find((t) => t.id === room.topic)?.name ?? room.topic;
 
+    // Whole screen, no page scroll: score sidebar on the left, board (or question) in an
+    // inset panel filling the rest
     return (
-        <div className="min-h-screen bg-[#2a3698] p-2 pb-6">
-            <p className="text-white text-right text-lg pr-2">
-                Room <span className="font-bold tracking-widest">{room.code}</span>
-            </p>
-            {room.status === "question" && active && activeTile ? (
-                <HostQuestion key={`${active.col}-${active.row}`} room={room} code={code} />
-            ) : (
-                <Board board={room.board} onSelect={(col, row) => openTile(code, col, row)} />
-            )}
-            <TeamScores
-                teams={room.teams}
-                points={room.status === "question" ? activeTile?.value : undefined}
-                onChange={(team, delta) => changeScore(code, team, delta)}
-            />
+        <div className="h-dvh flex bg-[#1c2470] text-white overflow-hidden">
+            <ScorePanel room={room} topic={topic} mode={panelMode} onMode={setPanelMode} />
+            <main className="flex-1 min-w-0 min-h-0 p-2">
+                <div className="relative h-full flex flex-col rounded-xl bg-[#2a3698] shadow-2xl p-2 overflow-hidden">
+                    {/* The sidebar header shows topic + room when expanded; otherwise this corner label does */}
+                    {panelMode !== "expanded" && (
+                        <p className="absolute top-1 right-3 z-10 text-sm opacity-80">
+                            <b className="mr-2">{topic} ·</b>
+                            Room <b className="tracking-widest">{room.code}</b>
+                        </p>
+                    )}
+                    {room.status === "question" && active && activeTile && panelMode === "hidden" && room.revealed && (
+                        <ResultToast key={`${active.col}-${active.row}`} room={room} />
+                    )}
+                    {room.status === "question" && active && activeTile ? (
+                        <div className="flex-1 min-h-0 pt-5">
+                            <HostQuestionView key={`${active.col}-${active.row}`} room={room} code={code} />
+                        </div>
+                    ) : (
+                        <div className="flex-1 min-h-0 pt-4">
+                            <Board board={room.board} onSelect={(col, row) => openTile(code, col, row)} />
+                        </div>
+                    )}
+                </div>
+            </main>
         </div>
     );
 }
 
-// Keyed per tile by the caller. The reading countdown here is what reveals the
-// options to everyone (showOptions), so the host tab must stay open.
-function HostQuestion({ room, code }: { room: Room; code: string }) {
-    const active = room.activeTile!;
-    const tile = room.board[active.col].tiles[active.row];
-    const questionOver = room.revealed || winnerOf(room) !== null || nobodyGotIt(room);
-    const reading = !optionsVisible(room) && !questionOver;
-
+// Sidebar hidden: each team's result slides down for 3 s after the reveal. Keyed per question.
+function ResultToast({ room }: { room: Room }) {
+    const box = useRef<HTMLDivElement>(null);
+    useLayoutEffect(() => {
+        const tl = gsap
+            .timeline()
+            .fromTo(box.current, { y: -80, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.4 * MOTION, ease: "back.out(1.6)" })
+            .to(box.current, { y: -80, autoAlpha: 0, duration: 0.3 * MOTION, ease: "power2.in" }, "+=3");
+        return () => {
+            tl.kill();
+        };
+    }, []);
+    const value = room.board[room.activeTile!.col].tiles[room.activeTile!.row].value;
+    const teams = room.teams.filter((t) => Object.values(room.players).some((p) => p.team === t.id));
     return (
-        <QuestionModal
-            categoryName={room.board[active.col].name}
-            tile={tile}
-            onClose={() => closeTile(code)}
-            revealed={questionOver}
-            onReveal={() => revealAnswer(code)}
-            optionsHidden={reading}
-            timer={
-                reading && room.readEndsAt !== null ? (
-                    <div className="flex flex-col items-center gap-2 w-full">
-                        <Countdown endsAt={room.readEndsAt} totalSeconds={room.readSeconds} label="Options in" onDone={() => showOptions(code)} />
-                        <button className={linkButton} onClick={() => showOptions(code)}>
-                            Show options now
-                        </button>
-                    </div>
-                ) : // Unmounts when the question ends, so the timeout reveal only
-                // fires if nobody won before the countdown reached zero
-                !questionOver && room.questionEndsAt !== null ? (
-                    <Countdown endsAt={room.questionEndsAt} totalSeconds={room.timerSeconds} onDone={() => revealAnswer(code)} />
-                ) : null
-            }
-            closeLabel="Next question"
-            hint="Points were added automatically. Use + / − below to fix them if needed."
+        <div
+            ref={box}
+            className="absolute top-6 left-1/2 -translate-x-1/2 z-20 bg-white text-black px-4 py-2 rounded-lg shadow-xl text-xl flex flex-wrap gap-x-4 opacity-0"
         >
-            {!reading && <AnswerList room={room} />}
-        </QuestionModal>
-    );
-}
-
-function AnswerList({ room }: { room: Room }) {
-    const winner = winnerOf(room);
-    const teamName = (team: string | null) => room.teams.find((t) => t.id === team)?.name ?? "no team";
-
-    return (
-        <div className="flex flex-col gap-2">
-            {winner ? (
-                <p className="text-3xl md:text-4xl font-bold text-yellow-300">
-                    {winner.name} ({teamName(winner.team)}) got it! +{activeTileOf(room)?.value}
-                </p>
-            ) : nobodyGotIt(room) || room.revealed ? (
-                <p className="text-3xl font-bold text-yellow-300">Nobody got it!</p>
-            ) : (
-                <p className="text-xl opacity-80">Waiting for answers…</p>
-            )}
-            {room.answers.length > 0 && (
-                <ul className="text-xl">
-                    {room.answers.map((a) => (
-                        <li key={a.playerId} className={a.correct ? "font-bold" : "opacity-70"}>
-                            {a.correct ? "✔" : "✘"} {a.name} ({teamName(a.team)})
-                        </li>
-                    ))}
-                </ul>
-            )}
+            {teams.map((t) => {
+                const a = room.answers.find((x) => x.team === t.id);
+                return (
+                    <span key={t.id} className="border-l-8 pl-2" style={{ borderLeftColor: t.color }}>
+                        {t.name} <b>{!a ? "—" : a.correct ? `+${value}` : "✘"}</b>
+                    </span>
+                );
+            })}
         </div>
     );
 }
+

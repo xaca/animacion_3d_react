@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 type Props = {
-    endsAt: number; // epoch ms (room.questionEndsAt)
+    endsAt: number; // epoch ms on this device's clock
     totalSeconds: number;
     // Text before the seconds, e.g. "Options in"
     label?: string;
@@ -9,8 +9,8 @@ type Props = {
     onDone?: () => void;
 };
 
-// Seconds left + shrinking bar. Each device uses its own clock; phones are
-// usually within a second of each other, which is fine for a classroom.
+// Seconds left + shrinking bar to an epoch deadline on THIS device's clock. Only the
+// host uses absolute deadlines from the room (they come from its own clock).
 export default function Countdown({ endsAt, totalSeconds, label, onDone }: Props) {
     const [now, setNow] = useState(() => Date.now());
     const done = now >= endsAt;
@@ -33,7 +33,17 @@ export default function Countdown({ endsAt, totalSeconds, label, onDone }: Props
     const leftMs = Math.max(0, endsAt - now);
     const seconds = Math.ceil(leftMs / 1000);
     const fraction = Math.min(1, leftMs / (totalSeconds * 1000));
+    return <Bar seconds={seconds} fraction={fraction} label={label} />;
+}
 
+// Phones: runs `seconds` from the moment it mounts (when the update reached this phone),
+// never comparing with another device's clock. Mount it with a key per question.
+export function LocalCountdown({ seconds, label }: { seconds: number; label?: string }) {
+    const [endsAt] = useState(() => Date.now() + seconds * 1000);
+    return <Countdown endsAt={endsAt} totalSeconds={seconds} label={label} />;
+}
+
+function Bar({ seconds, fraction, label }: { seconds: number; fraction: number; label?: string }) {
     return (
         <div className="w-full max-w-4xl">
             <p className={`text-2xl font-bold mb-1 ${seconds <= 5 ? "text-red-400" : ""}`}>

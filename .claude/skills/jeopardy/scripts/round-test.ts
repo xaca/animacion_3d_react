@@ -6,9 +6,8 @@
 // 3. Live round (Firestore): creates a throwaway room, plays it with 6 fake players, deletes it.
 //    Checks: setup blocks joins until openRoom, host sets team count / max size / start countdown / new names,
 //    full-team rule, Start runs the countdown, empty teams dropped at start, loose players rejoin mid-game,
-//    board built from the topic, reading time before the options, one try per team, two simultaneous correct
-//    answers -> exactly one winner, points go to the winner's team, "Next question"
-//    clears answers, all teams wrong -> nobodyGotIt, reveal and timer lock answers.
+//    board built from the topic, reading time before the options, every team answers once (first teammate
+//    counts), points for every correct team given once at the reveal, reveal locks answers.
 //
 // Exits with code 1 if any check fails.
 
@@ -24,7 +23,6 @@ function check(ok: boolean, label: string) {
     console.log(`${ok ? "PASS" : "FAIL"}  ${label}`);
     if (!ok) failures++;
 }
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ----- 1. Question content ---------------------------------------------------
 
@@ -105,6 +103,15 @@ try {
     check(room.players[fay.id].team === null, "a full team cannot be joined");
     check(rs.startProblem(room) === null, "Start is available with 2+ teams with players");
 
+    // Test players: a bot joins the emptiest team (delta, 0 players); removeBots removes only bots
+    await rs.addBot(code);
+    room = await read(code);
+    const bots = Object.values(room.players).filter((p) => p.bot);
+    check(bots.length === 1 && bots[0].team === delta && bots[0].name.includes("Bot"), "addBot puts a test player on the emptiest team");
+    await rs.removeBots(code);
+    room = await read(code);
+    check(!Object.values(room.players).some((p) => p.bot) && Object.keys(room.players).length === 6, "removeBots removes only the test players");
+
     await rs.setMaxTeamSize(code, 2);
     room = await read(code);
     check(rs.startProblem(room) !== null, "lowering the max below a team's size blocks start");
@@ -144,9 +151,11 @@ try {
 
     check(room.board.length === 5, `board has 5 categories (got ${room.board.length})`);
     check(room.board.every((c) => c.tiles.length === VALUES.length), "every category has 5 tiles");
+    check(rs.tilesLeft(room) === 25, "25 tiles to play at the start");
 
+    // Teams now: alpha (Ana, Dan, Eve), beta (Ben), gamma (Cam, Fay).
     // Round 1 (reading time): options hidden and answers rejected until the host's showOptions;
-    // then Cam wrong, then Ana and Ben answer correctly at the same moment
+    // then Ana (alpha) and Ben (beta) answer correctly at the same moment, Cam (gamma) wrong
     await rs.setReadSeconds(code, 10);
     await rs.openTile(code, 0, 1);
     room = await read(code);
@@ -154,6 +163,7 @@ try {
         room.optionsAt === null && room.questionEndsAt === null && room.readEndsAt !== null && room.readEndsAt > Date.now(),
         "openTile starts the reading time with the options hidden and no answer timer"
     );
+    check(!rs.isLastTile(room), "the first question is not the last");
     const tile = rs.activeTileOf(room)!;
     const wrong = tile.options.find((o) => o !== tile.answer)!;
     await rs.answer(code, ana.id, tile.answer); // too early
@@ -165,55 +175,50 @@ try {
         rs.optionsVisible(room) && room.optionsAt !== null && room.questionEndsAt === room.optionsAt + room.timerSeconds * 1000,
         "showOptions reveals the options and starts the answer timer"
     );
-    await rs.answer(code, cam.id, wrong);
-    await Promise.all([rs.answer(code, ana.id, tile.answer), rs.answer(code, ben.id, tile.answer)]);
+    await Promise.all([rs.answer(code, ana.id, tile.answer), rs.answer(code, ben.id, tile.answer), rs.answer(code, cam.id, wrong)]);
+    await rs.answer(code, dan.id, wrong); // alpha already answered through Ana
     room = await read(code);
-    const winner = rs.winnerOf(room);
-    check(room.answers.filter((a) => a.correct).length === 1, "exactly one correct answer recorded");
-    check(winner !== null && (winner.name === "Ana" || winner.name === "Ben"), `winner is Ana or Ben (got ${winner?.name})`);
-    const expected = room.teams.map((t) => (t.id === winner?.team ? tile.value : 0)).join(",");
-    check(scores(room) === expected, `only the winner's team scored ${tile.value} (scores ${scores(room)})`);
+    check(room.answers.length === 3, `one answer per team, all teams can answer (got ${room.answers.length})`);
+    check(room.answers.find((a) => a.team === alpha)?.playerId === ana.id, "the first teammate's answer counts for the team");
+    check(scores(room) === "0,0,0", "no points before the reveal");
+    check(rs.allTeamsAnswered(room), "allTeamsAnswered once every team with players answered");
+    // Timer and "all answered" can both fire the reveal: points must be given once
+    await Promise.all([rs.revealAnswer(code), rs.revealAnswer(code)]);
+    room = await read(code);
+    const expected = room.teams.map((t) => (t.id === alpha || t.id === beta ? tile.value : 0)).join(",");
+    check(room.revealed && scores(room) === expected, `both correct teams scored ${tile.value} exactly once, the wrong one 0 (scores ${scores(room)})`);
 
     // Next question clears the answers
     await rs.closeTile(code);
     room = await read(code);
     check(room.status === "board" && room.answers.length === 0, "Next question returns to the board with no answers");
+    check(rs.tilesLeft(room) === 24, "a closed tile is consumed");
 
-    // Round 2 (reading time 0): options immediately; every team wrong; Ana's try is ignored because Dan already used team 0's
+    // Round 2 (reading time 0): options at once; only Ben answers (wrong); a late answer after the reveal is ignored
     await rs.setReadSeconds(code, 0);
     await rs.openTile(code, 1, 0);
     room = await read(code);
-    check(rs.optionsVisible(room) && room.questionEndsAt !== null && room.questionEndsAt > Date.now(), "reading time 0 shows the options at once");
+    check(rs.optionsVisible(room), "reading time 0 shows the options at once");
     const tile2 = rs.activeTileOf(room)!;
     const wrong2 = tile2.options.find((o) => o !== tile2.answer)!;
-    for (const p of [dan, ben, cam]) await rs.answer(code, p.id, wrong2);
-    await rs.answer(code, ana.id, tile2.answer); // would be correct, but team 0 already answered
+    await rs.answer(code, ben.id, wrong2);
     room = await read(code);
-    check(room.answers.length === 3, `one try per team (got ${room.answers.length} answers)`);
-    check(rs.nobodyGotIt(room), "all teams wrong -> nobodyGotIt");
-    check(scores(room) === expected, "wrong answers cost no points");
+    check(!rs.allTeamsAnswered(room) && rs.answerProgress(room).answered === 1, "progress counts 1 of 3 teams");
+    await rs.revealAnswer(code);
+    await rs.answer(code, ana.id, tile2.answer); // too late: the host closed the question
+    room = await read(code);
+    check(room.answers.length === 1, "answers after the reveal are ignored");
+    check(scores(room) === expected, "wrong and missing answers cost no points");
     await rs.closeTile(code);
 
-    // Round 3: reveal locks answers
+    // A player without a team can't answer
     await rs.openTile(code, 2, 0);
+    const zoe = await rs.joinRoom(code, "Zoe");
     room = await read(code);
     const tile3 = rs.activeTileOf(room)!;
-    await rs.revealAnswer(code);
-    await rs.answer(code, ana.id, tile3.answer);
+    await rs.answer(code, zoe.id, tile3.answer);
     room = await read(code);
-    check(room.revealed && room.answers.length === 0, "revealAnswer locks new answers");
-    await rs.closeTile(code);
-
-    // Round 4: countdown locks answers (1-second timer, then answer too late)
-    await rs.setTimerSeconds(code, 1);
-    await rs.openTile(code, 3, 0);
-    room = await read(code);
-    const tile4 = rs.activeTileOf(room)!;
-    await sleep(1500);
-    await rs.answer(code, ben.id, tile4.answer);
-    room = await read(code);
-    check(room.answers.length === 0, "answers after the countdown are ignored");
-    check(scores(room) === expected, "late answers score no points");
+    check(room.answers.length === 0, "a player without a team can't answer");
 } catch (error) {
     check(false, `round crashed: ${error}`);
 } finally {

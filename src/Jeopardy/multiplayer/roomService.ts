@@ -9,8 +9,8 @@ import { pickTeamNames } from "../teamNames";
 // setup: host configures, nobody can join yet. lobby: code shown, players join and get ready.
 export type RoomStatus = "setup" | "lobby" | "board" | "question" | "end";
 
-// `team` is a Team id; a player is on at most one team
-export type Player = { id: string; name: string; team: string | null };
+// `team` is a Team id; a player is on at most one team. `bot`: test player answered by the host screen (useBots)
+export type Player = { id: string; name: string; team: string | null; bot?: true };
 
 // One per TEAM per question: whoever taps first answers for the whole team
 export type Answer = { playerId: string; name: string; team: string | null; choice: string; correct: boolean; at: number };
@@ -32,9 +32,9 @@ export type Room = {
     startsAt: number | null; // epoch ms; start countdown running when set (lobby only)
     board: Category[];
     activeTile: { col: number; row: number } | null;
-    readEndsAt: number | null; // epoch ms; reading countdown shown on every screen (display only)
-    optionsAt: number | null; // epoch ms, set by the host screen when the reading time ends; null = options hidden, answers rejected
-    questionEndsAt: number | null; // epoch ms = optionsAt + timerSeconds; answers after this are ignored
+    readEndsAt: number | null; // epoch ms on the host's clock; drives the host's reading countdown only
+    optionsAt: number | null; // set by the host screen when the reading time ends; null = options hidden, answers rejected
+    questionEndsAt: number | null; // epoch ms on the host's clock; drives the host's answer countdown only
     revealed: boolean; // answer shown to everyone; also locks answers
     answers: Answer[];
     players: Record<string, Player>;
@@ -135,6 +135,26 @@ export function startProblem(room: Room): string | null {
     if (activeTeams(room).length < 2) return "You need at least 2 teams with players";
     if (room.teams.some((t) => teamSize(room, t.id) > room.maxTeamSize)) return `Teams can have at most ${room.maxTeamSize} players`;
     return null;
+}
+
+// Test player for trying the game with one phone: joins the team with fewest players
+// that still has room. Ignored when every team is full.
+export async function addBot(code: string) {
+    await mutate(code, (room) => {
+        const open = room.teams.filter((t) => teamSize(room, t.id) < room.maxTeamSize);
+        if (room.status !== "lobby" || open.length === 0) return room;
+        const team = open.reduce((a, b) => (teamSize(room, b.id) < teamSize(room, a.id) ? b : a));
+        const n = Object.values(room.players).filter((p) => p.bot).length + 1;
+        const bot: Player = { id: randomId(10), name: `🤖 Bot ${n}`, team: team.id, bot: true };
+        return { ...room, players: { ...room.players, [bot.id]: bot } };
+    });
+}
+
+export async function removeBots(code: string) {
+    await mutate(code, (room) => ({
+        ...room,
+        players: Object.fromEntries(Object.entries(room.players).filter(([, p]) => !p.bot)),
+    }));
 }
 
 export async function openRoom(code: string) {
@@ -267,10 +287,21 @@ export async function showOptions(code: string) {
     });
 }
 
-// Shows the answer on every screen and locks new answers. Called by the host
-// button or automatically when the countdown reaches zero.
+// Ends the question: locks answers, shows the correct option everywhere and gives the
+// tile's points to EVERY team that answered correctly. Called by the host screen when
+// all teams have answered, when its timer ends, or by "Show answer". Runs once: a
+// second call (e.g. timer and "all answered" at the same moment) changes nothing.
 export async function revealAnswer(code: string) {
-    await mutate(code, (room) => (room.status === "question" ? { ...room, revealed: true } : room));
+    await mutate(code, (room) => {
+        const tile = activeTileOf(room);
+        if (!tile || room.revealed) return room;
+        const winners = new Set(room.answers.filter((a) => a.correct).map((a) => a.team));
+        return {
+            ...room,
+            revealed: true,
+            teams: room.teams.map((t) => (winners.has(t.id) ? { ...t, score: t.score + tile.value } : t)),
+        };
+    });
 }
 
 export async function closeTile(code: string) {
@@ -289,13 +320,6 @@ export async function closeTile(code: string) {
             answers: [],
         };
     });
-}
-
-export async function changeScore(code: string, teamIndex: number, delta: number) {
-    await mutate(code, (room) => ({
-        ...room,
-        teams: room.teams.map((t, i) => (i === teamIndex ? { ...t, score: t.score + delta } : t)),
-    }));
 }
 
 export async function backToLobby(code: string) {
@@ -342,26 +366,20 @@ export async function leaveRoom(code: string, playerId: string) {
     });
 }
 
-// The first correct answer wins the tile's points for the player's team.
-// One try per TEAM: whoever taps first answers for their whole team.
-// Runs in a transaction, so if two players are right at the same moment only one wins.
+// Every team answers; the first teammate to tap answers for the whole team. Points are
+// given in revealAnswer, so speed between teams doesn't matter. No clock is checked here:
+// the window is open from the host's showOptions until the host's revealAnswer, which
+// keeps phones with wrong clocks or slower networks on equal terms.
 export async function answer(code: string, playerId: string, choice: string) {
     await mutate(code, (room) => {
         const player = room.players[playerId];
         const tile = activeTileOf(room);
-        if (!tile || !player || winnerOf(room)) return room;
-        // Too early (options not shown yet) or too late (revealed / countdown ran out)
-        if (!optionsVisible(room)) return room;
-        if (room.revealed || (room.questionEndsAt !== null && Date.now() > room.questionEndsAt)) return room;
-        if (room.answers.some((a) => a.playerId === playerId || (player.team !== null && a.team === player.team))) return room;
+        if (!tile || !player || player.team === null) return room;
+        if (!optionsVisible(room) || room.revealed) return room;
+        if (room.answers.some((a) => a.team === player.team)) return room;
 
-        const correct = choice === tile.answer;
-        const entry: Answer = { playerId, name: player.name, team: player.team, choice, correct, at: Date.now() };
-        return {
-            ...room,
-            answers: [...room.answers, entry],
-            teams: room.teams.map((t) => (correct && t.id === player.team ? { ...t, score: t.score + tile.value } : t)),
-        };
+        const entry: Answer = { playerId, name: player.name, team: player.team, choice, correct: choice === tile.answer, at: Date.now() };
+        return { ...room, answers: [...room.answers, entry] };
     });
 }
 
@@ -372,23 +390,34 @@ export function activeTileOf(room: Room) {
     return room.board[room.activeTile.col].tiles[room.activeTile.row];
 }
 
+export function tilesLeft(room: Room): number {
+    return room.board.flatMap((c) => c.tiles).filter((t) => !t.used).length;
+}
+
+// True while the open question is the board's last unused tile (tiles are consumed by closeTile)
+export function isLastTile(room: Room): boolean {
+    return room.status === "question" && tilesLeft(room) === 1;
+}
+
 // False during the reading time at the start of a question. No clock involved:
 // the host screen flips it with showOptions and Firestore pushes it to every phone.
 export function optionsVisible(room: Room): boolean {
     return room.optionsAt !== null;
 }
 
-export function winnerOf(room: Room): Answer | null {
-    return room.answers.find((a) => a.correct) ?? null;
+// The answer a team gave for the current question, if any
+export function answerOf(room: Room, teamId: string | null): Answer | null {
+    return teamId === null ? null : (room.answers.find((a) => a.team === teamId) ?? null);
 }
 
-// True when every team (with players) has used its try and nobody got it right
-export function nobodyGotIt(room: Room): boolean {
-    const teams = new Set(Object.values(room.players).map((p) => p.team).filter((t) => t !== null));
-    return !winnerOf(room) && teams.size > 0 && [...teams].every((t) => room.answers.some((a) => a.team === t));
+// Teams with players, and how many of them have answered the current question
+export function answerProgress(room: Room): { answered: number; total: number } {
+    const teams = activeTeams(room);
+    return { answered: teams.filter((t) => answerOf(room, t.id) !== null).length, total: teams.length };
 }
 
-// The answer a player's team already gave for the current question, if any
-export function teamAnswerOf(room: Room, player: Player): Answer | null {
-    return room.answers.find((a) => a.playerId === player.id || (player.team !== null && a.team === player.team)) ?? null;
+// The host screen reveals as soon as this is true, so nobody waits for the timer
+export function allTeamsAnswered(room: Room): boolean {
+    const { answered, total } = answerProgress(room);
+    return total > 0 && answered === total;
 }

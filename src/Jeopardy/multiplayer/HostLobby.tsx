@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import Countdown from "../Countdown";
 import { TOPICS } from "../topics";
 import JoinQr from "./JoinQr";
-import { backToSetup, cancelCountdown, rerollTeamNames, startCountdown, startGame, startProblem, type Room } from "./roomService";
+import { addBot, backToSetup, cancelCountdown, removeBots, rerollTeamNames, startCountdown, startGame, startProblem, type Room } from "./roomService";
 import { linkButton, primaryButton, Screen } from "./ui";
 
 type Props = {
@@ -81,9 +81,20 @@ export default function HostLobby({ room, onExit }: Props) {
                 })}
             </div>
             {!counting && (
-                <button className={linkButton} onClick={() => rerollTeamNames(room.code)}>
-                    🎲 New team names
-                </button>
+                <div className="flex flex-wrap justify-center gap-6">
+                    <button className={linkButton} onClick={() => rerollTeamNames(room.code)}>
+                        🎲 New team names
+                    </button>
+                    {/* Lets one person test the game: bots fill other teams and the host screen answers for them */}
+                    <button className={linkButton} onClick={() => addBot(room.code)}>
+                        🧪 Add test player
+                    </button>
+                    {players.some((p) => p.bot) && (
+                        <button className={linkButton} onClick={() => removeBots(room.code)}>
+                            Remove test players
+                        </button>
+                    )}
+                </div>
             )}
 
             {unassigned.length > 0 && <p className="opacity-80">Choosing a team: {unassigned.map((p) => p.name).join(", ")}</p>}
