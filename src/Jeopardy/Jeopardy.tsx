@@ -1,21 +1,26 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import LocalGame from "./LocalGame";
 import HomeScreen from "./multiplayer/HomeScreen";
 import HostGame from "./multiplayer/HostGame";
+import HostLogin from "./multiplayer/HostLogin";
 import JoinScreen from "./multiplayer/JoinScreen";
 import PlayerGame from "./multiplayer/PlayerGame";
+import { isHostUnlocked, lockHost } from "./multiplayer/hostAuth";
 import { createRoom } from "./multiplayer/roomService";
+import { Message } from "./multiplayer/ui";
 
 // Each screen has its own URL:
 //   /             home (choose a mode)
 //   /local        one-screen game
-//   /join         join form
-//   /host/ABCD    host view of room ABCD
+//   /join         join form (/join?code=ABCD from the QR prefills the code)
+//   /host         creates a room and goes to its setup (host PIN required)
+//   /host/ABCD    host view of room ABCD (host PIN required)
 //   /play/ABCD    player view of room ABCD
 type View =
     | { kind: "home" }
     | { kind: "local" }
-    | { kind: "join" }
+    | { kind: "join"; code: string }
+    | { kind: "host-new" }
     | { kind: "host"; code: string }
     | { kind: "player"; code: string; playerId: string | null };
 
@@ -30,27 +35,30 @@ function readPlayerId(code: string): string | null {
     }
 }
 
-function viewFromPath(path: string): View {
+function viewFromPath(url: string): View {
+    const [path, query = ""] = url.split("?");
     const [, first, code] = path.split("/");
     if (first === "local") return { kind: "local" };
-    if (first === "join") return { kind: "join" };
-    if (first === "host" && code) return { kind: "host", code: code.toUpperCase() };
+    if (first === "join") return { kind: "join", code: (new URLSearchParams(query).get("code") ?? "").toUpperCase() };
+    if (first === "host") return code ? { kind: "host", code: code.toUpperCase() } : { kind: "host-new" };
     if (first === "play" && code) return { kind: "player", code: code.toUpperCase(), playerId: readPlayerId(code.toUpperCase()) };
     return { kind: "home" };
 }
 
 export default function Jeopardy() {
-    const [view, setView] = useState<View>(() => viewFromPath(location.pathname));
+    const [view, setView] = useState<View>(() => viewFromPath(location.pathname + location.search));
+    const [hostUnlocked, setHostUnlocked] = useState(isHostUnlocked);
 
     // Browser back/forward buttons
     useEffect(() => {
-        const onPop = () => setView(viewFromPath(location.pathname));
+        const onPop = () => setView(viewFromPath(location.pathname + location.search));
         addEventListener("popstate", onPop);
         return () => removeEventListener("popstate", onPop);
     }, []);
 
-    function go(path: string) {
-        history.pushState(null, "", path);
+    function go(path: string, replace = false) {
+        if (replace) history.replaceState(null, "", path);
+        else history.pushState(null, "", path);
         setView(viewFromPath(path));
     }
 
@@ -65,31 +73,43 @@ export default function Jeopardy() {
         go(`/play/${code}`);
     }
 
+    function logout() {
+        lockHost();
+        setHostUnlocked(false);
+    }
+
     switch (view.kind) {
         case "home":
-            return (
-                <HomeScreen
-                    onHost={async () => {
-                        try {
-                            go(`/host/${await createRoom()}`);
-                        } catch (error) {
-                            console.error("Could not create a room", error);
-                            alert("Could not create a room. Check your connection and try again.");
-                        }
-                    }}
-                    onJoin={() => go("/join")}
-                    onLocal={() => go("/local")}
-                />
-            );
+            return <HomeScreen onHost={() => go("/host")} onJoin={() => go("/join")} />;
         case "local":
             return <LocalGame />;
         case "join":
-            return <JoinScreen onBack={goHome} onJoined={joined} />;
+            return <JoinScreen initialCode={view.code} onBack={goHome} onJoined={joined} />;
+        case "host-new":
+            if (!hostUnlocked) return <HostLogin onUnlock={() => setHostUnlocked(true)} onBack={goHome} />;
+            // replace: the back button must not land on /host and create another room
+            return <NewRoom onCreated={(code) => go(`/host/${code}`, true)} onFailed={goHome} />;
         case "host":
-            return <HostGame key={view.code} code={view.code} onExit={goHome} />;
+            if (!hostUnlocked) return <HostLogin onUnlock={() => setHostUnlocked(true)} onBack={goHome} />;
+            return <HostGame key={view.code} code={view.code} onExit={goHome} onLogout={logout} />;
         case "player":
             // Opening /play/CODE without having joined from this tab: send them to the join form
             if (!view.playerId) return <JoinScreen onBack={goHome} onJoined={joined} />;
             return <PlayerGame key={view.code} code={view.code} playerId={view.playerId} onExit={goHome} />;
     }
+}
+
+function NewRoom({ onCreated, onFailed }: { onCreated: (code: string) => void; onFailed: () => void }) {
+    // Ref so React StrictMode's double effect in dev doesn't create two rooms
+    const started = useRef(false);
+    useEffect(() => {
+        if (started.current) return;
+        started.current = true;
+        createRoom().then(onCreated, (error) => {
+            console.error("Could not create a room", error);
+            alert("Could not create a room. Check your connection and try again.");
+            onFailed();
+        });
+    }, [onCreated, onFailed]);
+    return <Message text="Creating your room…" />;
 }

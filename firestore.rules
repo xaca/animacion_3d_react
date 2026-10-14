@@ -10,14 +10,23 @@ service cloud.firestore {
       allow update: if isRoom(request.resource.data) && request.resource.data.code == code;
     }
 
+    // Question bank, uploaded by scripts/seed-questions.ts with the Admin SDK
+    // (which bypasses these rules). The app only reads it.
+    match /questions/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Everything else is closed
     match /{document=**} {
       allow read, write: if false;
     }
 
     function isRoom(data) {
-      return data.keys().hasOnly(['code', 'status', 'teams', 'board', 'activeTile', 'answers', 'players'])
-        && data.status in ['lobby', 'board', 'question', 'end'];
+      return data.keys().hasOnly(['code', 'version', 'status', 'teams', 'board', 'activeTile', 'answers', 'players',
+          'topic', 'timerSeconds', 'maxTeamSize', 'startSeconds', 'readSeconds', 'startsAt', 'readEndsAt', 'optionsAt',
+          'questionEndsAt', 'revealed'])
+        && data.status in ['setup', 'lobby', 'board', 'question', 'end'];
     }
   }
 }

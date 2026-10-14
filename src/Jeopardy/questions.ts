@@ -1,8 +1,9 @@
 // `wrong` holds the 3 incorrect options shown next to the answer
 export type QA = { question: string; answer: string; wrong: string[] };
 
-// `options` is the answer plus the wrong options, already shuffled
-export type Tile = { question: string; answer: string; options: string[]; value: number; used: boolean };
+// `options` is the answer plus the wrong options, already shuffled.
+// `code` is an optional snippet shown in monospace (Java questions).
+export type Tile = { question: string; code?: string; answer: string; options: string[]; value: number; used: boolean };
 
 export type Category = { name: string; tiles: Tile[] };
 
@@ -168,7 +169,7 @@ export const BANK: Record<string, QA[][]> = {
     ],
 };
 
-function shuffle<T>(items: T[]): T[] {
+export function shuffle<T>(items: T[]): T[] {
     const copy = [...items];
     for (let i = copy.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -177,7 +178,7 @@ function shuffle<T>(items: T[]): T[] {
     return copy;
 }
 
-function pickOne<T>(items: T[]): T {
+export function pickOne<T>(items: T[]): T {
     return items[Math.floor(Math.random() * items.length)];
 }
 

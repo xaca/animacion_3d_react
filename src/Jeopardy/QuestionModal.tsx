@@ -7,6 +7,12 @@ type Props = {
     onClose: () => void;
     // Show the answer without waiting for the button (e.g. someone already got it right)
     revealed?: boolean;
+    // If set, "Show answer" calls this instead of local state (multiplayer: locks the phones too)
+    onReveal?: () => void;
+    // Countdown bar (multiplayer), shown under the category line
+    timer?: ReactNode;
+    // Reading time (multiplayer): question only, no options and no "Show answer" yet
+    optionsHidden?: boolean;
     closeLabel?: string;
     hint?: string;
     // Extra content under the question (e.g. the player answers in multiplayer)
@@ -18,6 +24,9 @@ export default function QuestionModal({
     tile,
     onClose,
     revealed = false,
+    onReveal,
+    timer,
+    optionsHidden = false,
     closeLabel = "Back to board",
     hint = "Use + / − below to give or take points, then go back.",
     children,
@@ -30,8 +39,15 @@ export default function QuestionModal({
             <p className="text-2xl opacity-80">
                 {categoryName} — {tile.value}
             </p>
+            {timer}
             <p className="text-4xl md:text-5xl font-bold max-w-4xl">{tile.question}</p>
+            {tile.code && (
+                <pre className="bg-black/40 text-left text-xl md:text-2xl px-6 py-4 max-w-4xl overflow-x-auto">{tile.code}</pre>
+            )}
 
+            {optionsHidden ? (
+                <p className="text-2xl opacity-80">Read the question… the options are coming.</p>
+            ) : (
             <ol className="grid md:grid-cols-2 gap-3 w-full max-w-4xl text-2xl md:text-3xl text-left">
                 {tile.options.map((option, i) => (
                     <li
@@ -47,12 +63,13 @@ export default function QuestionModal({
                     </li>
                 ))}
             </ol>
+            )}
 
             {children}
 
-            {!answerShown && (
+            {!answerShown && !optionsHidden && (
                 <button
-                    onClick={() => setShowAnswer(true)}
+                    onClick={() => (onReveal ? onReveal() : setShowAnswer(true))}
                     className="bg-white text-[#2a3698] text-2xl font-bold px-6 py-3 cursor-pointer hover:bg-yellow-300"
                 >
                     Show answer

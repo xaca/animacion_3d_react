@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "deploy": "npm run build && firebase deploy --only hosting",
     "deploy:all": "npm run build && firebase deploy",
+    "seed": "esbuild scripts/seed-questions.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.cache/jeopardy-seed.mjs --log-level=warning && node node_modules/.cache/jeopardy-seed.mjs",
     "test:jeopardy": "esbuild .claude/skills/jeopardy/scripts/round-test.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.cache/jeopardy-round-test.mjs --log-level=warning && node node_modules/.cache/jeopardy-round-test.mjs"
   },
   "dependencies": {
@@ -17,6 +18,7 @@
     "firebase": "^13.0.0",
     "gsap": "^3.15.0",
     "phaser": "^4.2.1",
+    "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwindcss": "^4.3.3",
@@ -25,6 +27,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.0",
     "@types/node": "^24.10.1",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.186.0",

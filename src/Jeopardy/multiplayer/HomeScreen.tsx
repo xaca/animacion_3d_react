@@ -3,10 +3,9 @@ import { primaryButton, Screen } from "./ui";
 type Props = {
     onHost: () => void;
     onJoin: () => void;
-    onLocal: () => void;
 };
 
-export default function HomeScreen({ onHost, onJoin, onLocal }: Props) {
+export default function HomeScreen({ onHost, onJoin }: Props) {
     return (
         <Screen>
             <h1 className="text-4xl md:text-6xl font-bold">Do you know your English?</h1>
@@ -17,9 +16,7 @@ export default function HomeScreen({ onHost, onJoin, onLocal }: Props) {
                 <button className={primaryButton} onClick={onJoin}>
                     Join a game
                 </button>
-                <button className={primaryButton} onClick={onLocal}>
-                    Play on one screen
-                </button>
+                {/* One-screen local mode is hidden for now; still reachable at /local */}
             </div>
             <p className="opacity-80 max-w-md">
                 Host on the big screen. Players join from their phones.

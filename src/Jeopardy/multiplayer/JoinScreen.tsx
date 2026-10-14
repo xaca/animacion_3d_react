@@ -1,14 +1,15 @@
 import { useState, type FormEvent } from "react";
-import { joinRoom } from "./roomService";
+import { joinRoom, ROOM_NOT_OPEN } from "./roomService";
 import { input, linkButton, primaryButton, Screen } from "./ui";
 
 type Props = {
+    initialCode?: string; // from the QR link (/join?code=ABCD); still editable as a fallback
     onJoined: (code: string, playerId: string) => void;
     onBack: () => void;
 };
 
-export default function JoinScreen({ onJoined, onBack }: Props) {
-    const [code, setCode] = useState("");
+export default function JoinScreen({ initialCode = "", onJoined, onBack }: Props) {
+    const [code, setCode] = useState(initialCode);
     const [name, setName] = useState("");
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
@@ -21,8 +22,9 @@ export default function JoinScreen({ onJoined, onBack }: Props) {
             const roomCode = code.trim().toUpperCase();
             const player = await joinRoom(roomCode, name.trim());
             onJoined(roomCode, player.id);
-        } catch {
-            setError("Room not found. Check the code on the big screen.");
+        } catch (err) {
+            const notOpen = err instanceof Error && err.message === ROOM_NOT_OPEN;
+            setError(notOpen ? "The host hasn't opened the room yet. Wait for the code on the big screen." : "Room not found. Check the code on the big screen.");
             setBusy(false);
         }
     }
@@ -37,7 +39,7 @@ export default function JoinScreen({ onJoined, onBack }: Props) {
                     maxLength={4}
                     value={code}
                     onChange={(e) => setCode(e.target.value)}
-                    autoFocus
+                    autoFocus={!initialCode}
                 />
                 <input
                     className={input}
@@ -45,6 +47,7 @@ export default function JoinScreen({ onJoined, onBack }: Props) {
                     maxLength={20}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    autoFocus={!!initialCode}
                 />
                 <button
                     type="submit"

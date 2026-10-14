@@ -11,8 +11,8 @@ export default function TeamScores({ teams, points, onChange }: Props) {
     return (
         <div className="flex flex-wrap justify-center gap-6 mt-4">
             {teams.map((team, i) => (
-                <div key={team.name} className="bg-white w-40 p-2 text-center shadow-lg">
-                    <h3 className="font-bold text-2xl border-b-4 border-black pb-1 mb-2">{team.name}</h3>
+                <div key={team.name} className="bg-white w-40 p-2 text-center shadow-lg border-t-8" style={{ borderTopColor: team.color ?? "#2a3698" }}>
+                    <h3 className="font-bold text-2xl border-b-4 border-black pb-1 mb-2 leading-tight">{team.name}</h3>
                     <div className="bg-[#2a3698] text-white font-bold text-3xl py-1">{team.score}</div>
                     {points !== undefined && onChange && (
                         <div className="flex justify-around mt-1 text-3xl font-bold">
