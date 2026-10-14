@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "deploy": "npm run build && firebase deploy --only hosting",
-    "deploy:all": "npm run build && firebase deploy"
+    "deploy:all": "npm run build && firebase deploy",
+    "test:jeopardy": "esbuild .claude/skills/jeopardy/scripts/round-test.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.cache/jeopardy-round-test.mjs --log-level=warning && node node_modules/.cache/jeopardy-round-test.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

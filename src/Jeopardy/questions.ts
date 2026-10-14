@@ -11,8 +11,9 @@ export const CATEGORIES_PER_GAME = 4;
 // Labels for the 4 answer options
 export const LETTERS = ["A", "B", "C", "D"];
 
-// Each category has questions grouped by difficulty: index 0 = easiest (200) ... 4 = hardest (1000)
-const BANK: Record<string, QA[][]> = {
+// Each category has questions grouped by difficulty: index 0 = easiest (200) ... 4 = hardest (1000).
+// Exported so the test script can check every question has 3 unique wrong options.
+export const BANK: Record<string, QA[][]> = {
     Vocabulary: [
         [
             { question: "What do you call a baby dog?", answer: "A puppy", wrong: ["A kitten", "A cub", "A calf"] },
