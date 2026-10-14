@@ -15,7 +15,7 @@ export const javascript: TopicContent = {
             [
                 { question: "What is typeof 42?", answer: "\"number\"", wrong: ["\"int\"", "\"integer\"", "\"float\""] },
                 { question: "What is the result of 7 / 2 in JavaScript?", answer: "3.5", wrong: ["3", "4", "An error"] },
-                { question: "What happens here?", code: "const x = 1;\nx = 2;", answer: "TypeError: assignment to constant variable", wrong: ["x becomes 2", "x stays 1 silently", "x becomes undefined"] },
+                { question: "What happens here?", code: "const x = 1;\nx = 2;", answer: "TypeError: assignment to constant variable", wrong: ["SyntaxError: const cannot be reassigned twice", "x stays 1 silently", "x becomes undefined"] },
             ],
             [
                 { question: "What does this print?", code: "let x;\nconsole.log(x);", answer: "undefined", wrong: ["null", "0", "An error"] },
@@ -25,7 +25,7 @@ export const javascript: TopicContent = {
             [
                 { question: "What does this print?", code: "console.log(\"5\" + 3);", answer: "53", wrong: ["8", "15", "An error"] },
                 { question: "What does this print?", code: "console.log(\"5\" - 3);", answer: "2", wrong: ["53", "NaN", "An error"] },
-                { question: "What is typeof null?", answer: "\"object\" (a famous old bug)", wrong: ["\"null\"", "\"undefined\"", "\"empty\""] },
+                { question: "What is typeof null?", answer: "\"object\" (a famous old bug)", wrong: ["\"null\"", "\"undefined\"", "\"number\" (null is stored as zero)"] },
             ],
             [
                 { question: "What does this print?", code: "console.log(0.1 + 0.2 === 0.3);", answer: "false", wrong: ["true", "undefined", "An error"] },
@@ -45,7 +45,7 @@ export const javascript: TopicContent = {
                 { question: "What does this print?", code: "console.log(\"Hello\"[0]);", answer: "H", wrong: ["e", "Hello", "undefined"] },
             ],
             [
-                { question: "What does this print?", code: "console.log(\"a,b,c\".split(\",\"));", answer: "[\"a\", \"b\", \"c\"]", wrong: ["\"abc\"", "3", "[\"a,b,c\"]"] },
+                { question: "What does this print?", code: "console.log(\"a,b,c\".split(\",\"));", answer: "[\"a\", \"b\", \"c\"]", wrong: ["\"abc\"", "[\"a\", \"b,c\"]", "[\"a,b,c\"]"] },
                 { question: "What does this print?", code: "console.log(\"banana\".includes(\"nan\"));", answer: "true", wrong: ["false", "2", "\"nan\""] },
                 { question: "What does this print?", code: "console.log(`2 + 3 = ${2 + 3}`);", answer: "2 + 3 = 5", wrong: ["2 + 3 = 2 + 3", "5 = 5", "2 + 3 = ${2 + 3}"] },
             ],
@@ -56,14 +56,14 @@ export const javascript: TopicContent = {
             ],
             [
                 { question: "What does this print?", code: "console.log(\"5\" == 5, \"5\" === 5);", answer: "true false", wrong: ["true true", "false false", "false true"] },
-                { question: "What does this print?", code: "console.log(\"10\" < \"9\");", answer: "true (strings compare letter by letter)", wrong: ["false", "An error", "NaN"] },
+                { question: "What does this print?", code: "console.log(\"10\" < \"9\");", answer: "true (strings compare letter by letter)", wrong: ["false (numbers are compared as numbers)", "An error", "NaN"] },
                 { question: "What does this print?", code: "console.log(\"ha\".repeat(3));", answer: "hahaha", wrong: ["ha3", "ha ha ha", "An error"] },
             ],
         ],
         "JS Functions": [
             [
                 { question: "Which keyword defines a function in JavaScript?", answer: "function", wrong: ["def", "func", "method"] },
-                { question: "What does return do?", answer: "Sends a value back and ends the function", wrong: ["Prints a value", "Repeats the function", "Declares a variable"] },
+                { question: "What does return do?", answer: "Sends a value back and ends the function", wrong: ["Pauses the function until it is called again", "Repeats the function", "Declares a variable"] },
                 { question: "What are a and b called here?", code: "function add(a, b) { }", answer: "Parameters", wrong: ["Returns", "Methods", "Properties"] },
             ],
             [
@@ -74,7 +74,7 @@ export const javascript: TopicContent = {
             [
                 { question: "What does this print?", code: "const sq = (x) => x * x;\nconsole.log(sq(4));", answer: "16", wrong: ["8", "44", "undefined"] },
                 { question: "What does this print?", code: "function hi(name = \"friend\") {\n  return `Hi ${name}`;\n}\nconsole.log(hi());", answer: "Hi friend", wrong: ["Hi undefined", "Hi ", "An error"] },
-                { question: "What is a callback?", answer: "A function passed to another function to be called later", wrong: ["A function that calls itself", "A function with no parameters", "A phone call API"] },
+                { question: "What is a callback?", answer: "A function passed to another function to be called later", wrong: ["A function that calls itself", "A function with no parameters", "A function that returns another function immediately"] },
             ],
             [
                 { question: "What does this print?", code: "let n = 1;\nfunction inc() { n++; }\ninc();\ninc();\nconsole.log(n);", answer: "3", wrong: ["1", "2", "undefined"] },
@@ -82,8 +82,8 @@ export const javascript: TopicContent = {
                 { question: "What does this print?", code: "console.log(add(2, 3));\nfunction add(a, b) { return a + b; }", answer: "5 (function declarations are hoisted)", wrong: ["An error: add is not defined", "undefined", "23"] },
             ],
             [
-                { question: "What is a closure?", answer: "A function that remembers the variables of the place where it was created", wrong: ["A function with no name", "A function that closes the browser", "A function that returns nothing"] },
-                { question: "What does await do?", code: "const res = await fetch(url);", answer: "Waits for the Promise to finish and gives its result", wrong: ["Stops the whole browser", "Runs the line twice", "Cancels the request"] },
+                { question: "What is a closure?", answer: "A function that remembers the variables of the place where it was created", wrong: ["A function that copies all global variables into itself when called", "A function that closes the browser", "A function that returns nothing"] },
+                { question: "What does await do?", code: "const res = await fetch(url);", answer: "Waits for the Promise to finish and gives its result", wrong: ["Stops the whole browser", "Turns the Promise into a loop that never blocks", "Cancels the request"] },
                 { question: "What does this print?", code: "const counter = () => {\n  let c = 0;\n  return () => ++c;\n};\nconst next = counter();\nnext();\nconsole.log(next());", answer: "2", wrong: ["1", "0", "undefined"] },
             ],
         ],
@@ -99,17 +99,17 @@ export const javascript: TopicContent = {
                 { question: "What does this print?", code: "const a = [1, 2, 3];\nconsole.log(a[5]);", answer: "undefined", wrong: ["An error", "null", "3"] },
             ],
             [
-                { question: "What does map do?", answer: "Creates a new array by transforming each element", wrong: ["Sorts the array", "Removes elements", "Draws a map"] },
+                { question: "What does map do?", answer: "Creates a new array by transforming each element", wrong: ["Sorts the array", "Removes elements", "Changes each element of the original array in place"] },
                 { question: "What does this print?", code: "console.log([1, 2, 3].map((x) => x * 2));", answer: "[2, 4, 6]", wrong: ["[1, 2, 3]", "12", "[2, 4, 6, 2, 4, 6]"] },
                 { question: "What does this print?", code: "console.log([1, 2, 3, 4].filter((x) => x % 2 === 0));", answer: "[2, 4]", wrong: ["[1, 3]", "[true, false, true, false]", "2"] },
             ],
             [
                 { question: "What does this print?", code: "console.log([1, 2, 3].includes(2));", answer: "true", wrong: ["false", "1", "2"] },
                 { question: "What does this print?", code: "console.log([5, 8, 12].find((x) => x > 6));", answer: "8", wrong: ["[8, 12]", "12", "true"] },
-                { question: "What does reduce do?", code: "[1, 2, 3].reduce((sum, x) => sum + x, 0)", answer: "Combines all elements into one value (here 6)", wrong: ["Removes duplicates", "Shortens the array by one", "Reverses the array"] },
+                { question: "What does reduce do?", code: "[1, 2, 3].reduce((sum, x) => sum + x, 0)", answer: "Combines all elements into one value (here 6)", wrong: ["Builds a new array with one element removed (here [2, 3])", "Shortens the array by one", "Reverses the array"] },
             ],
             [
-                { question: "What does this print?", code: "console.log([10, 9, 1].sort());", answer: "[1, 10, 9] (sorted as text)", wrong: ["[1, 9, 10]", "[10, 9, 1]", "An error"] },
+                { question: "What does this print?", code: "console.log([10, 9, 1].sort());", answer: "[1, 10, 9] (sorted as text)", wrong: ["[1, 9, 10]", "[10, 9, 1]", "[9, 10, 1] (sorted in reverse)"] },
                 { question: "What does this print?", code: "const a = [1, 2];\nconst b = [...a, 3];\nconsole.log(b);", answer: "[1, 2, 3]", wrong: ["[[1, 2], 3]", "[1, 2]", "An error"] },
                 { question: "What does this print?", code: "const a = [1, 2];\nconst b = a;\nb.push(3);\nconsole.log(a.length);", answer: "3", wrong: ["2", "1", "undefined"] },
             ],

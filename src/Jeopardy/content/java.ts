@@ -23,7 +23,7 @@ export const java: TopicContent = {
                 { question: "What is the default value of an int field in a Java class?", answer: "0", wrong: ["null", "undefined", "1"] },
             ],
             [
-                { question: "What is the difference between int and Integer?", answer: "Integer is an object (wrapper), int is a primitive", wrong: ["They are exactly the same", "int can be null", "Integer is a decimal type"] },
+                { question: "What is the difference between int and Integer?", answer: "Integer is an object (wrapper), int is a primitive", wrong: ["They are exactly the same", "int is an object and Integer is a primitive", "Integer is a decimal type"] },
                 { question: "Since Java 10, which keyword lets the compiler infer a local variable's type?", code: "___ list = new ArrayList<String>();", answer: "var", wrong: ["let", "auto", "dynamic"] },
                 { question: "What does this print?", code: "long big = 3_000_000_000L;\nSystem.out.println(big);", answer: "3000000000", wrong: ["3_000_000_000", "An error", "-1294967296"] },
             ],
@@ -74,7 +74,7 @@ export const java: TopicContent = {
             [
                 { question: "How many times does a do-while loop run at least?", answer: "1", wrong: ["0", "2", "It depends on the condition"] },
                 { question: "What does this print?", code: "for (int i = 1; i <= 10; i++) {\n    if (i % 2 == 0) continue;\n    System.out.print(i);\n}", answer: "13579", wrong: ["246810", "12345", "1357910"] },
-                { question: "What happens in a classic switch case without break?", answer: "Execution falls through to the next case", wrong: ["The program crashes", "The switch exits", "Only default runs"] },
+                { question: "What happens in a classic switch case without break?", answer: "Execution falls through to the next case", wrong: ["The compiler reports a missing break error", "The switch exits", "Only default runs"] },
             ],
             [
                 { question: "What is y?", code: "int y = (5 > 3) ? 10 : 20;", answer: "10", wrong: ["20", "5", "true"] },
@@ -101,10 +101,10 @@ export const java: TopicContent = {
             [
                 { question: "How do you get the size of an ArrayList list?", answer: "list.size()", wrong: ["list.length", "list.length()", "list.count"] },
                 { question: "What happens here?", code: "int[] a = new int[3];\na[3] = 7;", answer: "ArrayIndexOutOfBoundsException", wrong: ["The array grows to 4", "a[0] becomes 7", "Nothing"] },
-                { question: "Which loop goes through every element without an index?", code: "for (String name : names) { }", answer: "Enhanced for (for-each)", wrong: ["while loop", "do-while loop", "switch loop"] },
+                { question: "Which loop goes through every element without an index?", code: "for (String name : names) { }", answer: "Enhanced for (for-each)", wrong: ["while loop", "do-while loop", "The classic indexed for loop"] },
             ],
             [
-                { question: "Why can't you write ArrayList<int>?", answer: "Generics need objects, so use ArrayList<Integer>", wrong: ["ArrayList only stores Strings", "int is too small", "You can, it works"] },
+                { question: "Why can't you write ArrayList<int>?", answer: "Generics need objects, so use ArrayList<Integer>", wrong: ["ArrayList only stores Strings", "Arrays cannot be used inside generic classes", "You can, it works"] },
                 { question: "What does this print?", code: "ArrayList<String> l = new ArrayList<>();\nl.add(\"a\");\nl.add(\"b\");\nl.remove(0);\nSystem.out.println(l);", answer: "[b]", wrong: ["[a]", "[a, b]", "[]"] },
                 { question: "What is the default value of each element here?", code: "boolean[] flags = new boolean[5];", answer: "false", wrong: ["true", "null", "0"] },
             ],
@@ -122,11 +122,11 @@ export const java: TopicContent = {
             ],
             [
                 { question: "What does add(2, 3) return?", code: "static int add(int a, int b) {\n    return a + b;\n}", answer: "5", wrong: ["23", "void", "An error"] },
-                { question: "What does static mean on a method?", answer: "It belongs to the class; no object is needed to call it", wrong: ["It cannot change", "It runs automatically", "It is private"] },
+                { question: "What does static mean on a method?", answer: "It belongs to the class; no object is needed to call it", wrong: ["It cannot change", "It can be called only from inside the same class", "It is private"] },
                 { question: "Which access modifier hides a field from other classes?", answer: "private", wrong: ["public", "hidden", "protected"] },
             ],
             [
-                { question: "What is a constructor in Java?", answer: "A method with the class's name that runs when you use new", wrong: ["A method named init", "The main method", "A static field"] },
+                { question: "What is a constructor in Java?", answer: "A method with the class's name that runs when you use new", wrong: ["A static method that runs before every other method", "The main method", "A static field"] },
                 { question: "Which keyword makes a class inherit from another in Java?", answer: "extends", wrong: ["inherits", "implements", ": (colon)"] },
                 { question: "What does this refer to inside a Java method?", answer: "The current object", wrong: ["The class", "The parent class", "The last object created"] },
             ],
@@ -138,7 +138,7 @@ export const java: TopicContent = {
             [
                 { question: "Which method does System.out.println(obj) call to get the text?", answer: "toString()", wrong: ["print()", "getText()", "valueOf()"] },
                 { question: "What happens when you call a method on a null reference?", answer: "NullPointerException", wrong: ["It returns null", "It returns 0", "Nothing"] },
-                { question: "Java passes arguments to methods…", answer: "By value (for objects, the reference is copied)", wrong: ["By reference, always", "By name", "Only for primitives"] },
+                { question: "Java passes arguments to methods…", answer: "By value (for objects, the reference is copied)", wrong: ["By reference (the method gets the original variable)", "By name", "Only for primitives"] },
             ],
         ],
     },

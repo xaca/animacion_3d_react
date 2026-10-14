@@ -16,9 +16,9 @@ export default function EndScreen({ teams, membersOf, onPlayAgain }: Props) {
         <div className="min-h-screen bg-[#2a3698] text-white flex flex-col items-center justify-center gap-6 p-4">
             <h1 className="text-5xl font-bold">Game over!</h1>
             <p className="text-yellow-300 text-3xl font-bold text-center">
-                {winners.length > 1 ? `Tie: ${winners.join(", ")}` : `${winners[0]} wins!`}
+                {teams.length === 0 ? "Everyone left the game 🤷" : winners.length > 1 ? `Tie: ${winners.join(", ")}` : `${winners[0]} wins!`}
             </p>
-            <Podium teams={teams} membersOf={membersOf} />
+            {teams.length > 0 && <Podium teams={teams} membersOf={membersOf} />}
             {onPlayAgain && (
                 <button
                     onClick={onPlayAgain}

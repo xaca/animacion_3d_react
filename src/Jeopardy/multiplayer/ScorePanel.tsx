@@ -30,8 +30,11 @@ export default function ScorePanel({ room, topic, mode, onMode }: Props) {
         const width = el.getBoundingClientRect().width;
         const growing = target > width;
         const shrinking = target < width;
-        // Ends every transition visible, even when a quick second toggle interrupted the last one
-        const fadeIn = () => gsap.to(el.querySelectorAll(".sb-fade"), { autoAlpha: 1, x: 0, duration: 0.2 * MOTION });
+        // Ends every transition visible, even when a quick second toggle interrupted the last
+        // one. clearProps removes the leftover transform: it would create a stacking context
+        // that traps the row's tooltip under the board panel.
+        const fadeIn = () =>
+            gsap.to(el.querySelectorAll(".sb-fade"), { autoAlpha: 1, x: 0, duration: 0.2 * MOTION, clearProps: "transform,opacity,visibility" });
         const tl = gsap.timeline();
         if (shrinking) {
             tl.to(el.querySelectorAll(".sb-fade"), { autoAlpha: 0, duration: 0.15 * MOTION });
@@ -48,7 +51,11 @@ export default function ScorePanel({ room, topic, mode, onMode }: Props) {
     // New content fades in, one item after another
     useLayoutEffect(() => {
         const items = aside.current!.querySelectorAll(".sb-fade");
-        const tween = gsap.fromTo(items, { autoAlpha: 0, x: -8 }, { autoAlpha: 1, x: 0, duration: 0.25 * MOTION, stagger: 0.03 * MOTION });
+        const tween = gsap.fromTo(
+            items,
+            { autoAlpha: 0, x: -8 },
+            { autoAlpha: 1, x: 0, duration: 0.25 * MOTION, stagger: 0.03 * MOTION, clearProps: "transform,opacity,visibility" }
+        );
         return () => {
             tween.kill();
         };
@@ -59,7 +66,8 @@ export default function ScorePanel({ room, topic, mode, onMode }: Props) {
 
     return (
         <>
-            <aside ref={aside} className="relative shrink-0 h-full flex flex-col whitespace-nowrap">
+            {/* z-20: tooltips and the "+N" badge must paint above the board panel next to it */}
+        <aside ref={aside} className="relative z-20 shrink-0 h-full flex flex-col whitespace-nowrap">
                 {shown === "expanded" && (
                     <div className="flex flex-col h-full p-3 gap-3">
                         <header className="sb-fade flex items-start justify-between gap-2">
@@ -137,7 +145,7 @@ function TeamList({ room, variant }: { room: Room; variant: "expanded" | "rail" 
             const before = tops.current.get(id);
             const now = el.offsetTop; // ignores transforms, so a running slide doesn't skew it
             if (reordered && before !== undefined && before !== now) {
-                gsap.fromTo(el, { y: before - now }, { y: 0, duration: 0.6 * MOTION, ease: "power2.out", overwrite: true });
+                gsap.fromTo(el, { y: before - now }, { y: 0, duration: 0.6 * MOTION, ease: "power2.out", overwrite: true, clearProps: "transform" });
             }
             tops.current.set(id, now);
         }

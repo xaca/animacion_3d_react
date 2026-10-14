@@ -52,10 +52,10 @@ export const csharp: TopicContent = {
             [
                 { question: "Which check is true for both null and \"\"?", answer: "string.IsNullOrEmpty(s)", wrong: ["s == null", "s.Length == 0", "s.IsEmpty()"] },
                 { question: "What does this print?", code: "string[] parts = \"a,b,c\".Split(',');\nConsole.WriteLine(parts.Length);", answer: "3", wrong: ["5", "2", "1"] },
-                { question: "What does the @ do here?", code: "string path = @\"C:\\files\\new\";", answer: "Makes a verbatim string: backslashes are not escapes", wrong: ["Makes the string read-only", "Interpolates variables", "It is an error"] },
+                { question: "What does the @ do here?", code: "string path = @\"C:\\files\\new\";", answer: "Makes a verbatim string: backslashes are not escapes", wrong: ["Makes the string read-only", "Marks the string for translation at compile time", "It is an error"] },
             ],
             [
-                { question: "Why use StringBuilder in a loop that adds text many times?", answer: "Strings are immutable, so += creates a new string each time", wrong: ["+= does not work in loops", "StringBuilder prints faster", "Strings have a maximum length of 100"] },
+                { question: "Why use StringBuilder in a loop that adds text many times?", answer: "Strings are immutable, so += creates a new string each time", wrong: ["+= does not work in loops", "StringBuilder is the only class that can hold long text", "Strings have a maximum length of 100"] },
                 { question: "What does this print?", code: "string s = \"abc\";\ns.Replace(\"a\", \"x\");\nConsole.WriteLine(s);", answer: "abc", wrong: ["xbc", "x", "An error"] },
                 { question: "What does this print?", code: "string a = \"hi\";\nstring b = \"h\" + \"i\";\nConsole.WriteLine(a == b);", answer: "True", wrong: ["False", "An error", "hi"] },
             ],
@@ -78,13 +78,13 @@ export const csharp: TopicContent = {
             ],
             [
                 { question: "What is s?", code: "int day = 2;\nstring s = day switch\n{\n    1 => \"Mon\",\n    2 => \"Tue\",\n    _ => \"Other\"\n};", answer: "Tue", wrong: ["Mon", "Other", "It does not compile"] },
-                { question: "In a C# switch expression, what does _ mean?", answer: "Any other value (the default)", wrong: ["An empty string", "Zero", "A variable named _"] },
+                { question: "In a C# switch expression, what does _ mean?", answer: "Any other value (the default)", wrong: ["An empty string", "The number zero written as a letter", "A variable named _"] },
                 { question: "What does this print?", code: "int? n = null;\nConsole.WriteLine(n.HasValue);", answer: "False", wrong: ["True", "null", "An error"] },
             ],
             [
                 { question: "What is grade?", code: "int score = 85;\nstring grade = score switch\n{\n    >= 90 => \"A\",\n    >= 80 => \"B\",\n    _ => \"C\"\n};", answer: "B", wrong: ["A", "C", "It does not compile"] },
                 { question: "What does this pattern check?", code: "if (obj is string text) { }", answer: "Whether obj is a string, and stores it in text", wrong: ["Whether obj equals the word \"text\"", "Converts obj to a string always", "It does not compile"] },
-                { question: "What does ?. do here?", code: "int? len = name?.Length;", answer: "Returns null instead of crashing when name is null", wrong: ["Checks if Length is positive", "Makes name nullable", "Throws when name is null"] },
+                { question: "What does ?. do here?", code: "int? len = name?.Length;", answer: "Returns null instead of crashing when name is null", wrong: ["Checks if Length is positive", "Converts name into an empty string when it is null", "Throws when name is null"] },
             ],
         ],
         "C# Collections & Loops": [
@@ -122,21 +122,21 @@ export const csharp: TopicContent = {
             ],
             [
                 { question: "What does Add(2, 3) return?", code: "int Add(int a, int b)\n{\n    return a + b;\n}", answer: "5", wrong: ["23", "void", "An error"] },
-                { question: "What is this?", code: "public string Name { get; set; }", answer: "An auto-property to read and write a value", wrong: ["A method with no return", "A constant", "A constructor"] },
+                { question: "What is this?", code: "public string Name { get; set; }", answer: "An auto-property to read and write a value", wrong: ["A method with no return", "A method that must return a string value", "A constructor"] },
                 { question: "C# method names are usually written in…", answer: "PascalCase (CalculateTotal)", wrong: ["camelCase (calculateTotal)", "snake_case (calculate_total)", "UPPERCASE (CALCULATETOTAL)"] },
             ],
             [
-                { question: "What is a constructor in C#?", answer: "A method with the class's name that runs on new", wrong: ["A method named Init", "The Main method", "A static field"] },
-                { question: "What does this property allow?", code: "public int Age { get; private set; }", answer: "Anyone can read Age; only the class can change it", wrong: ["Nobody can read Age", "Anyone can change Age", "Age is a constant"] },
+                { question: "What is a constructor in C#?", answer: "A method with the class's name that runs on new", wrong: ["A static method that runs before Main starts", "The Main method", "A static field"] },
+                { question: "What does this property allow?", code: "public int Age { get; private set; }", answer: "Anyone can read Age; only the class can change it", wrong: ["Nobody can read Age", "Anyone can change Age", "Only the class can read Age; anyone can change it"] },
                 { question: "Which syntax makes a C# class inherit from Animal?", answer: "class Dog : Animal", wrong: ["class Dog extends Animal", "class Dog inherits Animal", "class Dog(Animal)"] },
             ],
             [
                 { question: "What does Greet() return?", code: "string Greet(string name = \"friend\") => $\"Hi {name}\";", answer: "Hi friend", wrong: ["Hi name", "Hi ", "It does not compile"] },
-                { question: "Which keywords let a C# method be overridden in a subclass?", answer: "virtual in the parent, override in the child", wrong: ["override in both", "@Override in the child", "abstract in the child"] },
-                { question: "What does out do here?", code: "int.TryParse(\"42\", out int n);", answer: "The method writes its result into n", wrong: ["Prints the result", "Makes n a constant", "Returns n to Main"] },
+                { question: "Which keywords let a C# method be overridden in a subclass?", answer: "virtual in the parent, override in the child", wrong: ["override in the parent, virtual in the child", "@Override in the child", "abstract in the child"] },
+                { question: "What does out do here?", code: "int.TryParse(\"42\", out int n);", answer: "The method writes its result into n", wrong: ["Copies n so the method cannot change it", "Makes n a constant", "Returns n to Main"] },
             ],
             [
-                { question: "What is the difference between a class and a struct in C#?", answer: "A class is a reference type, a struct is a value type", wrong: ["Structs cannot have methods", "Classes cannot have fields", "They are identical"] },
+                { question: "What is the difference between a class and a struct in C#?", answer: "A class is a reference type, a struct is a value type", wrong: ["Structs cannot have methods", "Classes cannot have fields", "A struct is a reference type, a class is a value type"] },
                 { question: "What does this print?", code: "class Box { public int V; }\nvar a = new Box { V = 1 };\nvar b = a;\nb.V = 5;\nConsole.WriteLine(a.V);", answer: "5", wrong: ["1", "0", "An error"] },
                 { question: "What is a record in C# 9+?", answer: "A type built for data, with value-based equality", wrong: ["A database table", "A list of logs", "A struct that cannot have properties"] },
             ],

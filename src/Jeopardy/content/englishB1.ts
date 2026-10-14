@@ -20,7 +20,7 @@ export const englishB1: TopicContent = {
             ],
             [
                 { question: "What does 'to postpone' mean?", answer: "To delay something to a later time", wrong: ["To cancel something forever", "To finish something early", "To forget something"] },
-                { question: "What is 'a bargain'?", answer: "Something bought for less than its usual price", wrong: ["A serious argument", "A heavy load", "An expensive gift"] },
+                { question: "What is 'a bargain'?", answer: "Something bought for less than its usual price", wrong: ["A serious argument", "Something sold for more than it is worth", "An expensive gift"] },
             ],
             [
                 { question: "What does 'ubiquitous' mean?", answer: "Present everywhere", wrong: ["Very rare", "Extremely large", "Impossible to see"] },
@@ -49,7 +49,7 @@ export const englishB1: TopicContent = {
                 { question: "Complete: You ___ smoke here. It's forbidden.", answer: "mustn't", wrong: ["don't have to", "needn't", "might not"] },
             ],
             [
-                { question: "Complete: If she had studied, she ___ the exam.", answer: "would have passed", wrong: ["would pass", "will pass", "had passed"] },
+                { question: "Complete: If she had studied, she ___ the exam.", answer: "would have passed", wrong: ["would had passed", "will pass", "had passed"] },
                 { question: "Complete: The man ___ car was stolen called the police.", answer: "whose", wrong: ["who", "which", "that"] },
             ],
         ],
@@ -67,7 +67,7 @@ export const englishB1: TopicContent = {
                 { question: "What does 'to find out' mean?", answer: "To discover information", wrong: ["To lose something", "To go outside", "To invent an excuse"] },
             ],
             [
-                { question: "What does 'to put off' mean?", answer: "To postpone", wrong: ["To wear something", "To turn off the lights", "To insult someone"] },
+                { question: "What does 'to put off' mean?", answer: "To postpone", wrong: ["To cancel", "To turn off the lights", "To insult someone"] },
                 { question: "What does 'to look after' mean?", answer: "To take care of someone", wrong: ["To search for someone", "To follow someone", "To admire someone"] },
             ],
             [

@@ -6,8 +6,9 @@ description: Everything about the "Do you know your English?" Jeopardy game in s
 # Jeopardy game ("Do you know your English?")
 
 A classroom quiz game. The host shows the board on a big screen; players answer
-multiple-choice questions on their phones. Topics: Java, C#, JavaScript (75 questions each),
-HTML & CSS, OOP (language-agnostic), AI, UX/UI, pop culture, English A1 and B1 (50 each). Live at **https://jeopardy-76b82.web.app**.
+multiple-choice questions on their phones. 11 topics / 625 questions, organized in groups
+(`GROUPS` in topics.ts, tabs in Setup): 💻 Coding (Java, C#, JavaScript — 75 each — HTML & CSS, OOP),
+🎨 Design (UX/UI, Graphic Design), 🤖 AI, 🇬🇧 English (A1, B1), 🎉 Popular Culture (50 each). Live at **https://jeopardy-76b82.web.app**.
 
 This repo (`react_test`) is a lab of class examples; `src/App.tsx` currently renders only `<Jeopardy />`.
 Stack: React 19 + TypeScript (strict, `noUnusedLocals`) + Vite + Tailwind 4 + Firebase 13 (Firestore + Hosting).
@@ -36,8 +37,8 @@ Routing is hand-written in `src/Jeopardy/Jeopardy.tsx` (no router library): `vie
 | `Jeopardy.tsx` | Entry + URL routing |
 | `questions.ts` | `Tile`/`Category` types, `shuffle`, `pickOne`, `markUsed`, `allUsed`, `LETTERS`, `VALUES`; plus the legacy `BANK` + `buildBoard()` used only by the hidden local mode |
 | `questionService.ts` | `loadQuestions(topic)` (Firestore `questions` query) and `buildBoardFrom(questions)` (5 categories × 5 values, options shuffled) |
-| `topics.ts` | `TOPICS`: id/name/tagline cards for the lobby (ids must match `content/`) |
-| `content/` | Source of all questions (`java.ts`, `csharp.ts`, `javascript.ts`, `htmlCss.ts`, `oop.ts`, `ai.ts`, `uxUi.ts`, `popCulture.ts`, `englishA1.ts`, `englishB1.ts`, `index.ts`, `types.ts`). Uploaded by the seed script; **never imported by the app** so answers stay out of the bundle |
+| `topics.ts` | `GROUPS` (tab row) and `TOPICS`: id/name/tagline/group cards for Setup (ids must match `content/`) |
+| `content/` | Source of all questions (`java.ts`, `csharp.ts`, `javascript.ts`, `htmlCss.ts`, `oop.ts`, `ai.ts`, `uxUi.ts`, `graphicDesign.ts`, `popCulture.ts`, `englishA1.ts`, `englishB1.ts`, `index.ts`, `types.ts`). Uploaded by the seed script; **never imported by the app** so answers stay out of the bundle |
 | `teams.ts` | `Team` type (`id`, `name`, `score`, `color?`), `makeTeams(n)` (local mode only), `rankTeams` (competition ranking for the podium) |
 | `teamNames.ts` | `TEAM_NAMES` pool (16 color + animal names, e.g. "Red Fox", each with a hex color) and `pickTeamNames(n, taken)` |
 | `Board.tsx` | Category × value grid |
@@ -59,7 +60,8 @@ Routing is hand-written in `src/Jeopardy/Jeopardy.tsx` (no router library): `vie
 | `multiplayer/HostQuestionView.tsx` | Host question screen (keyed per tile), one viewport, no scrolling: top bar (category · value, ⭐ Final question badge, compact countdowns), auto-fitting question/code (`useFitText`, em-based children), 2×2 options grid, bottom bar (status left; one main action right: "Show options now" → "Show answer" → yellow "Next question →" / "🏆 See final results" + questions-left counter). **Enter / →** presses the main button (busy ref swallows doubles). Holds the clock logic: reading/answer countdowns, 1 s close grace, auto-reveal when all answered, `useBots` |
 | `multiplayer/JoinQr.tsx` | Canvas QR for `${origin}/join?code=ABCD` (package `qrcode`) |
 | `multiplayer/PlayerGame.tsx` | Phone: `TeamPicker` (pick one of the host's teams; shows the start countdown), `AnswerPicker` (options + countdown + result) |
-| `multiplayer/JoinScreen.tsx`, `HomeScreen.tsx`, `ui.tsx` | Join form (code prefilled from the QR link, still editable), home, shared Tailwind classes (`primaryButton`, `linkButton`, `input`, `Screen`, `Message`) |
+| `multiplayer/JoinScreen.tsx`, `HomeScreen.tsx`, `ui.tsx` | Join form (code prefilled from the QR link, still editable), home, shared Tailwind classes (`primaryButton`, `linkButton`, `input`, `Screen`, `Message` with optional `backLabel`) |
+| `multiplayer/HowToPlay.tsx` | "❓ How to play · Cómo jugar" link + bilingual instructions overlay (6 steps, ES\|EN toggle, **Spanish default**, remembered in `localStorage["jeopardy-lang"]`). On home, join form and the player's team picker |
 
 Firebase setup lives outside the folder: `src/lib/firebase.ts` (exports `db`), `firebase.json`, `.firebaserc`, `firestore.rules`.
 The seed script is `scripts/seed-questions.ts` (repo root).
@@ -114,6 +116,8 @@ Every room write goes through `mutate(code, room => newRoom)`, which runs a **Fi
 - **Last question**: ⭐ badge on host and phones while it's open; after its reveal the main button reads "🏆 See final results". Closing it → `GameOverSplash` on every screen, then podium (animated rise + confetti); phones add "Your team finished 2nd of 3!".
 - Topic name is shown in the host board header and in the phones' question header. Programming topics use language-prefixed category names (Java…, C#…, JS…) so boards can't be confused.
 - Players can join mid-game and pick any team that isn't full; the team count and names can only change before the game (setup or lobby). Teams never vanish on their own (only empty ones at start).
+- A player's "Leave game" (and the closed-room / kicked messages) goes back to **the join form with the code prefilled**, not home.
+- Mid-game, a team whose **last member leaves** vanishes (score included, inside `leaveRoom`'s transaction); when **no team has players left** the room goes to `end` and the end screens show "Everyone left the game" instead of a winner. Only the explicit Leave button triggers this — a closed browser never says goodbye (presence detection is a backlog idea).
 - Game over → podium (host: with member names; phones: compact).
 
 ## Firebase
@@ -129,9 +133,9 @@ Every room write goes through `mutate(code, room => newRoom)`, which runs a **Fi
 
 **Test alone (one phone):** host a room, in the waiting room click "🧪 Add test player" (`addBot`: "🤖 Bot N" on the emptiest team; `removeBots` clears them), join from your phone on another team, play. The host tab must stay open: it answers for the bots.
 
-**Add or edit questions:** edit the topic file in `src/Jeopardy/content/`. Each category needs 5 levels × ≥2 questions; wrong options plausible for the audience. Then **seed** (below) and run `npm run test:jeopardy`.
+**Add or edit questions:** edit the topic file in `src/Jeopardy/content/`. Each category needs 5 levels × ≥2 questions; wrong options plausible for the audience, **and length-balanced**: the seed script and the round test fail any question whose correct answer is clearly the longest option (more words than every wrong one AND >1.5× the chars of the longest) or clearly the shortest — students learned to pick the longest option. Fix by making 1–2 wrong options as long as the answer (mirrored statements work well). Then **seed** (below) and run `npm run test:jeopardy`.
 
-**Add a topic:** new file in `content/` (5 categories × 5 levels × ≥2), register it in `content/index.ts` **and** `topics.ts`, seed, test.
+**Add a topic:** new file in `content/` (5 categories × 5 levels × ≥2), register it in `content/index.ts` **and** `topics.ts` (with a `group`; new groups go in `GROUPS`), seed, test.
 
 **Seed questions into Firestore:** writes to `questions` are blocked by rules and the user has no service-account key, so seeding is a 3-step dance with the user (the auto-mode classifier rejects Claude deploying weakened rules):
 1. Set `allow write: if true;` on `questions` in `firestore.rules`; **the user** runs `npx firebase deploy --only firestore:rules`.
@@ -156,7 +160,7 @@ Every room write goes through `mutate(code, room => newRoom)`, which runs a **Fi
 - The correct answer is inside the room document, so a player inspecting network traffic could find it. Accepted for a classroom; hiding it needs Cloud Functions (paid Blaze plan).
 - ESLint `react-refresh/only-export-components`: don't export constants from component files (that's why `LETTERS` is in `questions.ts` and `rankTeams` in `teams.ts`).
 - ESLint `react-hooks/refs`: don't write `ref.current` during render; copy props into a ref inside an effect (see `Countdown.tsx`).
-- GSAP + React: never let GSAP write text React also renders (it replaces React's text node and later updates are lost). The sidebar's score `<span>` is rendered empty and only its layout effect writes `textContent`. Kill timelines in effect cleanups (`tl.kill()`), not `ctx.revert()`, which snaps widths back. The user prefers plain GSAP (no `@gsap/react`, no Playwright).
+- GSAP + React: never let GSAP write text React also renders (it replaces React's text node and later updates are lost). The sidebar's score `<span>` is rendered empty and only its layout effect writes `textContent`. Kill timelines in effect cleanups (`tl.kill()`), not `ctx.revert()`, which snaps widths back. Finish transform tweens with `clearProps: "transform"` — a leftover `translate(0,0)` creates a stacking context that trapped the rail tooltips under the board panel. The user prefers plain GSAP (no `@gsap/react`, no Playwright).
 - In the Bash tool, heredocs containing apostrophes (lots of them in the questions) can break; write files with the Write/Edit tools.
 - Code style: 4-space indent, double quotes, semicolons, Tailwind classes inline, colors `#2a3698` (blue) and `yellow-300` (highlight). Comments are short and explain *why*.
 

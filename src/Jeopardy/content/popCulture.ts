@@ -15,7 +15,7 @@ export const popCulture: TopicContent = {
                 { question: "Pikachu is a character from which franchise?", answer: "Pokémon", wrong: ["Digimon", "Mario", "Sonic"] },
             ],
             [
-                { question: "What game genre is Fortnite's most famous mode?", answer: "Battle royale", wrong: ["Racing", "Sports", "Puzzle"] },
+                { question: "What game genre is Fortnite's most famous mode?", answer: "Battle royale", wrong: ["Racing", "Sports", "Tower defense"] },
                 { question: "Which company created Mario?", answer: "Nintendo", wrong: ["Sony", "Sega", "Capcom"] },
             ],
             [
@@ -56,7 +56,7 @@ export const popCulture: TopicContent = {
             ],
             [
                 { question: "What is the name of Harry Potter's school?", answer: "Hogwarts", wrong: ["Hogsmeade", "Gryffindor", "Durmstrang"] },
-                { question: "A ring must be destroyed in a volcano in which saga?", answer: "The Lord of the Rings", wrong: ["Harry Potter", "Narnia", "Star Wars"] },
+                { question: "A ring must be destroyed in a volcano in which saga?", answer: "The Lord of the Rings", wrong: ["Harry Potter", "The Chronicles of Narnia", "Star Wars"] },
             ],
             [
                 { question: "The movie Encanto takes place in which country?", answer: "Colombia", wrong: ["Mexico", "Brazil", "Peru"] },
@@ -67,18 +67,18 @@ export const popCulture: TopicContent = {
                 { question: "In The Matrix, which pill does Neo take?", answer: "The red pill", wrong: ["The blue pill", "The green pill", "Both pills"] },
             ],
             [
-                { question: "What was the first feature-length animated Disney movie (1937)?", answer: "Snow White and the Seven Dwarfs", wrong: ["Pinocchio", "Cinderella", "Bambi"] },
+                { question: "What was the first feature-length animated Disney movie (1937)?", answer: "Snow White and the Seven Dwarfs", wrong: ["Pinocchio", "Cinderella", "Dumbo the Flying Elephant"] },
                 { question: "Hayao Miyazaki co-founded which animation studio?", answer: "Studio Ghibli", wrong: ["Pixar", "Toei Animation", "DreamWorks"] },
             ],
         ],
         "TV Series": [
             [
-                { question: "Where does SpongeBob live?", answer: "In a pineapple under the sea", wrong: ["Under a rock", "In a boat", "In a cave"] },
+                { question: "Where does SpongeBob live?", answer: "In a pineapple under the sea", wrong: ["Under a rock", "In a boat", "In a sunken pirate ship"] },
                 { question: "In which city do The Simpsons live?", answer: "Springfield", wrong: ["Shelbyville", "Quahog", "South Park"] },
             ],
             [
                 { question: "In Stranger Things, what is the dark parallel world called?", answer: "The Upside Down", wrong: ["The Other Side", "The Dark Zone", "The Underworld"] },
-                { question: "In which series do robbers wear red suits and Dalí masks?", answer: "Money Heist", wrong: ["Lupin", "Narcos", "Elite"] },
+                { question: "In which series do robbers wear red suits and Dalí masks?", answer: "Money Heist", wrong: ["Lupin", "Narcos", "Peaky Blinders"] },
             ],
             [
                 { question: "\"Winter is coming\" is a famous phrase from which series?", answer: "Game of Thrones", wrong: ["Vikings", "The Witcher", "Outlander"] },
@@ -96,7 +96,7 @@ export const popCulture: TopicContent = {
         "Mixed Bag": [
             [
                 { question: "Which superhero got his powers from a spider bite?", answer: "Spider-Man", wrong: ["Batman", "Superman", "Ant-Man"] },
-                { question: "What shape is Harry Potter's scar?", answer: "A lightning bolt", wrong: ["A star", "A circle", "A snake"] },
+                { question: "What shape is Harry Potter's scar?", answer: "A lightning bolt", wrong: ["A star", "A crescent moon", "A snake"] },
             ],
             [
                 { question: "Lionel Messi was born in which country?", answer: "Argentina", wrong: ["Brazil", "Spain", "Uruguay"] },

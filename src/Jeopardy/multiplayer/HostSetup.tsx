@@ -1,4 +1,5 @@
-import { TOPICS } from "../topics";
+import { useState } from "react";
+import { GROUPS, TOPICS } from "../topics";
 import {
     openRoom,
     READ_SECONDS_CHOICES,
@@ -27,12 +28,29 @@ const select = "bg-white text-black px-3 py-1";
 
 // Host-only configuration. The code is hidden on purpose: players join from the lobby.
 export default function HostSetup({ room, onExit, onLogout }: Props) {
+    // Topics come grouped (Coding, Design…); start on the selected topic's group
+    const [group, setGroup] = useState(() => TOPICS.find((t) => t.id === room.topic)?.group ?? GROUPS[0].id);
+
     return (
         <Screen>
             <h1 className="text-4xl font-bold">Set up the game</h1>
 
+            <div className="flex flex-wrap justify-center gap-1">
+                {GROUPS.map((g) => (
+                    <button
+                        key={g.id}
+                        onClick={() => setGroup(g.id)}
+                        className={`px-4 py-2 font-bold rounded-t-lg cursor-pointer ${
+                            group === g.id ? "bg-yellow-300 text-black" : "bg-white/10 hover:bg-white/25"
+                        }`}
+                    >
+                        {g.name}
+                    </button>
+                ))}
+            </div>
+
             <div className="flex flex-wrap justify-center gap-3 max-w-3xl">
-                {TOPICS.map((topic) => (
+                {TOPICS.filter((t) => t.group === group).map((topic) => (
                     <button
                         key={topic.id}
                         onClick={() => setTopic(room.code, topic.id)}

@@ -16,15 +16,15 @@ export const htmlCss: TopicContent = {
             ],
             [
                 { question: "What is the first line of an HTML5 document?", answer: "<!DOCTYPE html>", wrong: ["<html5>", "<?html?>", "<doc html>"] },
-                { question: "What is src here?", code: "<img src=\"cat.png\">", answer: "An attribute: extra information on a tag", wrong: ["A tag inside another tag", "The text of the element", "A CSS rule"] },
+                { question: "What is src here?", code: "<img src=\"cat.png\">", answer: "An attribute: extra information on a tag", wrong: ["A tag inside another tag", "The text of the element", "The text shown when the image loads"] },
             ],
             [
                 { question: "How do you write a comment in HTML?", answer: "<!-- comment -->", wrong: ["// comment", "/* comment */", "# comment"] },
-                { question: "Which tag links a CSS file?", answer: "<link rel=\"stylesheet\" href=\"style.css\">", wrong: ["<css src=\"style.css\">", "<style href=\"style.css\">", "<script src=\"style.css\">"] },
+                { question: "Which tag links a CSS file?", answer: "<link rel=\"stylesheet\" href=\"style.css\">", wrong: ["<stylesheet link=\"style.css\" rel=\"css\">", "<style href=\"style.css\">", "<script src=\"style.css\">"] },
             ],
             [
-                { question: "Which meta tag makes a page scale properly on phones?", answer: "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">", wrong: ["<meta name=\"mobile\" content=\"true\">", "<meta charset=\"phone\">", "<meta name=\"scale\" content=\"auto\">"] },
-                { question: "What does semantic HTML mean?", answer: "Using tags that describe their meaning (nav, article, footer)", wrong: ["Using only div tags", "Writing HTML in lowercase", "Adding a comment to every tag"] },
+                { question: "Which meta tag makes a page scale properly on phones?", answer: "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">", wrong: ["<meta name=\"mobile\" content=\"true\">", "<meta name=\"screen\" content=\"responsive, scale=device\">", "<meta name=\"scale\" content=\"auto\">"] },
+                { question: "What does semantic HTML mean?", answer: "Using tags that describe their meaning (nav, article, footer)", wrong: ["Writing tags that the browser checks for spelling (div, span, box)", "Writing HTML in lowercase", "Adding a comment to every tag"] },
             ],
         ],
         "Tags & Elements": [
@@ -85,7 +85,7 @@ export const htmlCss: TopicContent = {
                 { question: "What does \"h1, h2\" select?", answer: "Both h1 and h2 elements", wrong: ["h2 inside h1", "Only h1", "h1 followed by h2"] },
             ],
             [
-                { question: "What does a:hover style?", answer: "A link while the mouse is over it", wrong: ["A visited link", "A clicked link", "All links"] },
+                { question: "What does a:hover style?", answer: "A link while the mouse is over it", wrong: ["A visited link", "A clicked link", "A link the user is clicking right now"] },
                 { question: "What does \"div > p\" select?", answer: "p elements that are direct children of a div", wrong: ["All p inside a div at any depth", "div elements after a p", "p elements bigger than a div"] },
             ],
             [

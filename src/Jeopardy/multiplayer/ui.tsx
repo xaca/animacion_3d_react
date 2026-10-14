@@ -15,13 +15,13 @@ export function Screen({ children }: { children: ReactNode }) {
     );
 }
 
-export function Message({ text, onBack }: { text: string; onBack?: () => void }) {
+export function Message({ text, onBack, backLabel = "Back to home" }: { text: string; onBack?: () => void; backLabel?: string }) {
     return (
         <Screen>
             <p className="text-3xl font-bold">{text}</p>
             {onBack && (
                 <button className={primaryButton} onClick={onBack}>
-                    Back to home
+                    {backLabel}
                 </button>
             )}
         </Screen>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { LocalCountdown } from "../Countdown";
 import GameOverSplash from "../GameOverSplash";
+import HowToPlay from "./HowToPlay";
 import Podium from "../Podium";
 import { LETTERS } from "../questions";
 import { rankTeams } from "../teams";
@@ -19,10 +20,10 @@ export default function PlayerGame({ code, playerId, onExit }: Props) {
     const room = useRoom(code);
 
     if (room === undefined) return <Message text="Loading…" />;
-    if (room === null) return <Message text="The host closed this room." onBack={onExit} />;
+    if (room === null) return <Message text="The host closed this room." onBack={onExit} backLabel="Join a game" />;
 
     const player = room.players[playerId];
-    if (!player) return <Message text="You are no longer in this room." onBack={onExit} />;
+    if (!player) return <Message text="You are no longer in this room." onBack={onExit} backLabel="Join a game" />;
 
     async function leave() {
         await leaveRoom(code, playerId);
@@ -79,7 +80,7 @@ function PlayerEnd({ room, player }: { room: Room; player: Player }) {
                     Your team finished {ordinal(mine.place)} of {ranked.length}!
                 </p>
             )}
-            <Podium teams={room.teams} />
+            {room.teams.length === 0 ? <p className="text-2xl opacity-80">Everyone left the game.</p> : <Podium teams={room.teams} />}
         </>
     );
 }
@@ -141,6 +142,7 @@ function TeamPicker({ room, player }: { room: Room; player: Player }) {
             ) : (
                 player.team !== null && room.status === "lobby" && <p className="text-xl opacity-80">Waiting for the host to start…</p>
             )}
+            {room.status === "lobby" && <HowToPlay />}
         </>
     );
 }

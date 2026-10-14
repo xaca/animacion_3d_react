@@ -358,11 +358,31 @@ export async function chooseTeam(code: string, playerId: string, teamId: string)
     });
 }
 
+// Mid-game, a team whose last member leaves disappears, score included; with no teams
+// left the game is over. Only the explicit "Leave game" button lands here: a phone that
+// just closes the browser never says goodbye, so its player (and team) stay.
 export async function leaveRoom(code: string, playerId: string) {
     await mutate(code, (room) => {
         const players = { ...room.players };
         delete players[playerId];
-        return { ...room, players };
+        let next: Room = { ...room, players };
+        if (room.status === "board" || room.status === "question") {
+            const alive = next.teams.filter((t) => Object.values(players).some((p) => p.team === t.id));
+            if (alive.length < next.teams.length) next = { ...next, teams: alive };
+            if (alive.length === 0) {
+                next = {
+                    ...next,
+                    status: "end",
+                    activeTile: null,
+                    readEndsAt: null,
+                    optionsAt: null,
+                    questionEndsAt: null,
+                    revealed: false,
+                    answers: [],
+                };
+            }
+        }
+        return next;
     });
 }
 

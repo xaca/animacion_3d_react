@@ -24,6 +24,19 @@ function check(ok: boolean, label: string) {
     if (!ok) failures++;
 }
 
+const words = (s: string) => s.trim().split(/\s+/).length;
+
+// Same rule as the seed script: the correct answer must not be a length giveaway
+function lengthGiveaway(answer: string, wrong: string[]): string | null {
+    const aw = words(answer);
+    const ac = answer.length;
+    const ww = wrong.map(words);
+    const wc = wrong.map((w) => w.length);
+    if (ww.every((n) => aw > n) && ac > 1.5 * Math.max(...wc)) return "longest";
+    if (ww.every((n) => aw < n) && 1.5 * ac < Math.min(...wc)) return "shortest";
+    return null;
+}
+
 // ----- 1. Question content ---------------------------------------------------
 
 for (const topic of TOPIC_CONTENT) {
@@ -38,6 +51,8 @@ for (const topic of TOPIC_CONTENT) {
                 const options = [q.answer, ...q.wrong].map((o) => o.trim().toLowerCase());
                 const ok = q.wrong.length === 3 && new Set(options).size === 4;
                 if (!ok) check(false, `${topic.id} / ${category}: "${q.question}" needs 3 unique wrong options`);
+                const g = lengthGiveaway(q.answer, q.wrong);
+                if (g) check(false, `${topic.id} / ${category}: "${q.question}" answer is clearly the ${g} option`);
             }
         });
     }
@@ -219,6 +234,24 @@ try {
     await rs.answer(code, zoe.id, tile3.answer);
     room = await read(code);
     check(room.answers.length === 0, "a player without a team can't answer");
+    await rs.closeTile(code);
+
+    // Mid-game leavers: a team vanishes with its last member; no teams left -> game over
+    await rs.leaveRoom(code, ben.id);
+    room = await read(code);
+    check(
+        room.teams.length === 2 && !room.teams.some((t) => t.id === beta) && scores(room) === "400,0",
+        `beta vanished when its last member left; other scores kept (${scores(room)})`
+    );
+    for (const p of [ana, dan, eve, cam]) await rs.leaveRoom(code, p.id);
+    room = await read(code);
+    check(room.status === "board" && room.teams.length === 1, "the game continues while one team still has players");
+    await rs.leaveRoom(code, fay.id);
+    room = await read(code);
+    check(
+        room.status === "end" && room.teams.length === 0 && room.players[zoe.id] !== undefined,
+        "all teams gone -> game over (a teamless player doesn't keep it alive)"
+    );
 } catch (error) {
     check(false, `round crashed: ${error}`);
 } finally {

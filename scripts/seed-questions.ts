@@ -18,7 +18,22 @@ function fail(message: string): never {
     process.exit(1);
 }
 
-// Full board shape and 4 distinct options per question
+const words = (s: string) => s.trim().split(/\s+/).length;
+
+// Players spot it when the correct answer is always the longest (or shortest) option.
+// Flag it only when it's a clear giveaway: more words than every wrong option AND
+// 1.5x the characters of the longest one (or the symmetric case).
+function lengthGiveaway(answer: string, wrong: string[]): string | null {
+    const aw = words(answer);
+    const ac = answer.length;
+    const ww = wrong.map(words);
+    const wc = wrong.map((w) => w.length);
+    if (ww.every((n) => aw > n) && ac > 1.5 * Math.max(...wc)) return "longest";
+    if (ww.every((n) => aw < n) && 1.5 * ac < Math.min(...wc)) return "shortest";
+    return null;
+}
+
+// Full board shape, 4 distinct options per question, no length giveaways
 function validate(topic: TopicContent) {
     const names = Object.keys(topic.categories);
     if (names.length !== CATEGORIES) fail(`${topic.id}: expected ${CATEGORIES} categories, got ${names.length}`);
@@ -32,6 +47,8 @@ function validate(topic: TopicContent) {
                 const options = [qa.answer, ...qa.wrong].map((o) => o.trim());
                 if (options.some((o) => !o) || !qa.question.trim()) fail(`${where_} has empty text`);
                 if (new Set(options.map((o) => o.toLowerCase())).size !== 4) fail(`${where_} has duplicate options`);
+                const g = lengthGiveaway(qa.answer, qa.wrong);
+                if (g) fail(`${where_}: the correct answer is clearly the ${g} option (balance the lengths)`);
             }
         });
     }

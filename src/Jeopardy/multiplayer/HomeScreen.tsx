@@ -1,3 +1,4 @@
+import HowToPlay from "./HowToPlay";
 import { primaryButton, Screen } from "./ui";
 
 type Props = {
@@ -21,6 +22,7 @@ export default function HomeScreen({ onHost, onJoin }: Props) {
             <p className="opacity-80 max-w-md">
                 Host on the big screen. Players join from their phones.
             </p>
+            <HowToPlay />
         </Screen>
     );
 }

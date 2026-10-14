@@ -28,6 +28,10 @@ teams, countdown, podium). Roughly ordered by value for a classroom.
 - Board UX: score panel on the left, board fits the screen without scrolling, +/− score buttons removed, phones show only their team's score and place.
 - Score sidebar rebuilt (shadcn Sidebar as reference, GSAP only): expanded / icon rail / hidden, Ctrl/⌘+B and S shortcuts, inset board, animated width, re-rank slide, score count-up with "+N" badge, answer pulse, sliding results toast.
 - Test players (bots) answered by the host screen, to try the game with a single phone.
+- Topic groups in Setup (tab row, `GROUPS` in topics.ts); new Graphic Design topic (11 topics / 625 questions).
+- Answer-length balance: 130 questions fixed where the correct answer was clearly the longest option; the rule is now enforced by the seed script and the round test.
+- "Leave game" returns to the join form with the code prefilled; bilingual How to play / Cómo jugar overlay (ES default) on home, join and team-pick screens.
+- Mid-game leavers: a team vanishes (with its points) when its last member leaves; all teams gone → "Everyone left the game" end screen. Rail tooltip z-order/stacking fix.
 - Question screen rebuilt (`HostQuestionView`): fits one viewport with auto-shrinking text (`useFitText`), top-bar countdowns, bottom bar with one main action (yellow Next/Finish, Enter/→ shortcut, questions-left counter), ⭐ Final question badge, GameOverSplash + animated podium with confetti. Sidebar scrollbar removed (compact rows from 6 teams). +/- hint gone.
 
 ## Ideas parked (decided against for now)
@@ -51,7 +55,8 @@ teams, countdown, podium). Roughly ordered by value for a classroom.
 - **Daily Double** tile: one hidden tile where the team bets points.
 - **Final round** with a bet, before the end screen.
 - **Sound effects** on the host screen (correct / wrong / time up).
-- **Kick a single player** in the host lobby (teams already have ✕).
+- **Kick a single player** in the host lobby.
+- **Presence detection** (Firebase Realtime Database `onDisconnect`): drop players whose phone silently disconnects, so ghost players/teams can't linger when someone closes the browser instead of tapping Leave.
 
 ## Content ideas
 

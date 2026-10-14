@@ -92,10 +92,13 @@ export default function Jeopardy() {
         case "host":
             if (!hostUnlocked) return <HostLogin onUnlock={() => setHostUnlocked(true)} onBack={goHome} />;
             return <HostGame key={view.code} code={view.code} onExit={goHome} onLogout={logout} />;
-        case "player":
+        case "player": {
             // Opening /play/CODE without having joined from this tab: send them to the join form
-            if (!view.playerId) return <JoinScreen onBack={goHome} onJoined={joined} />;
-            return <PlayerGame key={view.code} code={view.code} playerId={view.playerId} onExit={goHome} />;
+            if (!view.playerId) return <JoinScreen initialCode={view.code} onBack={goHome} onJoined={joined} />;
+            // Leaving (or losing) a game lands back on the join form with the code ready
+            const backToJoin = () => go(`/join?code=${view.code}`);
+            return <PlayerGame key={view.code} code={view.code} playerId={view.playerId} onExit={backToJoin} />;
+        }
     }
 }
 

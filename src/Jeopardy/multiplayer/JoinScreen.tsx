@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import HowToPlay from "./HowToPlay";
 import { joinRoom, ROOM_NOT_OPEN } from "./roomService";
 import { input, linkButton, primaryButton, Screen } from "./ui";
 
@@ -58,6 +59,7 @@ export default function JoinScreen({ initialCode = "", onJoined, onBack }: Props
                 </button>
             </form>
             {error && <p className="text-yellow-300 font-bold">{error}</p>}
+            <HowToPlay />
             <button className={linkButton} onClick={onBack}>
                 Back
             </button>
