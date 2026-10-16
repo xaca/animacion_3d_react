@@ -6,9 +6,9 @@ description: Everything about the "Do you know your English?" Jeopardy game in s
 # Jeopardy game ("Do you know your English?")
 
 A classroom quiz game. The host shows the board on a big screen; players answer
-multiple-choice questions on their phones. 11 topics / 625 questions, organized in groups
+multiple-choice questions on their phones. 19 topics / 1025 questions, organized in groups
 (`GROUPS` in topics.ts, tabs in Setup): 💻 Coding (Java, C#, JavaScript — 75 each — HTML & CSS, OOP),
-🎨 Design (UX/UI, Graphic Design), 🤖 AI, 🇬🇧 English (A1, B1), 🎉 Popular Culture (50 each). Live at **https://jeopardy-76b82.web.app**.
+🎨 Design (UX/UI, Graphic Design), 🤖 Tech & AI (AI, Technology), 🇬🇧 English (A1, B1), 🎉 Popular Culture (Popular Culture, Video Games, Books), 🎵 Music (Rap & Hip-Hop, Reggaeton, Pop, Rock), ⚽ Sports (50 each). Live at **https://jeopardy-76b82.web.app**.
 
 This repo (`react_test`) is a lab of class examples; `src/App.tsx` currently renders only `<Jeopardy />`.
 Stack: React 19 + TypeScript (strict, `noUnusedLocals`) + Vite + Tailwind 4 + Firebase 13 (Firestore + Hosting).
@@ -38,15 +38,15 @@ Routing is hand-written in `src/Jeopardy/Jeopardy.tsx` (no router library): `vie
 | `questions.ts` | `Tile`/`Category` types, `shuffle`, `pickOne`, `markUsed`, `allUsed`, `LETTERS`, `VALUES`; plus the legacy `BANK` + `buildBoard()` used only by the hidden local mode |
 | `questionService.ts` | `loadQuestions(topic)` (Firestore `questions` query) and `buildBoardFrom(questions)` (5 categories × 5 values, options shuffled) |
 | `topics.ts` | `GROUPS` (tab row) and `TOPICS`: id/name/tagline/group cards for Setup (ids must match `content/`) |
-| `content/` | Source of all questions (`java.ts`, `csharp.ts`, `javascript.ts`, `htmlCss.ts`, `oop.ts`, `ai.ts`, `uxUi.ts`, `graphicDesign.ts`, `popCulture.ts`, `englishA1.ts`, `englishB1.ts`, `index.ts`, `types.ts`). Uploaded by the seed script; **never imported by the app** so answers stay out of the bundle |
+| `content/` | Source of all questions (`java.ts`, `csharp.ts`, `javascript.ts`, `htmlCss.ts`, `oop.ts`, `ai.ts`, `uxUi.ts`, `graphicDesign.ts`, `popCulture.ts`, `englishA1.ts`, `englishB1.ts`, `technology.ts`, `videoGames.ts`, `books.ts`, `rap.ts`, `reggaeton.ts`, `pop.ts`, `rock.ts`, `sports.ts`, `index.ts`, `types.ts`). Uploaded by the seed script; **never imported by the app** so answers stay out of the bundle |
 | `teams.ts` | `Team` type (`id`, `name`, `score`, `color?`), `makeTeams(n)` (local mode only), `rankTeams` (competition ranking for the podium) |
 | `teamNames.ts` | `TEAM_NAMES` pool (16 color + animal names, e.g. "Red Fox", each with a hex color) and `pickTeamNames(n, taken)` |
 | `Board.tsx` | Category × value grid |
 | `QuestionModal.tsx` | **Local mode only** now: question + options + reveal (multiplayer host uses `HostQuestionView`) |
 | `useFitText.ts` | `useFitText(max, min, deps)`: shrinks the font until the content fits its box (bounded flex/grid child + overflow-hidden); reruns on resize |
-| `GameOverSplash.tsx` | Full-screen "🏁 Game over!" GSAP moment between the last question and the podium (host + phones), `onDone` when finished |
+| `GameOverSplash.tsx` | Full-screen "🏁 Game over!" (or `text`, e.g. "🎮 Next game!") GSAP moment between the last question and the podium (host + phones), `onDone` when finished |
 | `Countdown.tsx` | Default `Countdown`: bar to an epoch deadline on this device's clock (host only; `onDone` fires once → showOptions / reveal / start). `LocalCountdown`: runs N seconds from mount (phones; never compares clocks) |
-| `Podium.tsx` | 2nd–1st–3rd blocks, ties share a step, 4th+ listed below; GSAP: steps rise 3rd→2nd→1st, confetti burst on the winner; `EndScreen.tsx` wraps it with "Play again" |
+| `Podium.tsx` | 2nd–1st–3rd blocks, ties share a step, 4th+ listed below; GSAP: steps rise 3rd→2nd→1st, confetti burst on the winner; `EndScreen.tsx` wraps it with "Play again" (local) or `actions` (host: 🔁 Next game, same room / ✨ New room / Close room, rising in after the podium; Enter = same room) |
 | `TeamScores.tsx` | Score cards with optional +/− buttons (local mode only) |
 | `multiplayer/ScorePanel.tsx`, `panelMode.ts` | Host score sidebar (shadcn-Sidebar-inspired layout, plain Tailwind + **GSAP**, no shadcn). States `expanded` (280 px: topic, room, ranked rows with initials avatar, members, score) / `rail` (72 px: avatars + score, CSS tooltip) / `hidden` (only a "Scores ›" tab; `ResultToast` slides results in for 3 s). Remembered in `localStorage["jeopardy-score-panel"]`; **S** cycles, **Ctrl/⌘+B** toggles expanded↔rail; narrow windows default to rail. GSAP: width tween with content swapped only while it fits, staggered fade-in, FLIP re-rank slide (plain tweens), score count-up + "+N" badge, ring pulse on answer. `MOTION` = 0 under prefers-reduced-motion |
 | `multiplayer/useBots.ts` | Test players: host screen answers for every `bot` player once the options show (random choice ~50% correct, random time within 80% of the answer time) via the normal `answer()` |
@@ -54,13 +54,18 @@ Routing is hand-written in `src/Jeopardy/Jeopardy.tsx` (no router library): `vie
 | `multiplayer/roomService.ts` | **All Firestore room access.** Types `Room`, `Player`, `Answer`; host/player actions; helpers `activeTileOf`, `optionsVisible`, `answerOf`, `answerProgress`, `allTeamsAnswered`, `tilesLeft`, `isLastTile`, `startProblem` |
 | `multiplayer/useRoom.ts` | `useRoom(code)` → `undefined` loading, `null` missing/error, else `Room` (live via `onSnapshot`). Reloads the page once if the room was hosted by a newer build (`room.version` > `APP_VERSION`) |
 | `multiplayer/hostAuth.ts`, `HostLogin.tsx` | Host PIN gate: SHA-256 hash of the PIN in `hostAuth.ts` (currently the hash of **1041**), unlock remembered in `localStorage["jeopardy-host"]` until "Log out" (Setup). Deterrent only: runs in the browser |
-| `multiplayer/HostSetup.tsx` | Host-only config (status `setup`, code hidden): topic cards, Timer / Teams / Max per team / Start countdown selects, team-name chips + "🎲 New names", **Open room** |
+| `multiplayer/HostSetup.tsx` | Host-only config (status `setup`, code hidden), one viewport: header (live summary chips + small "Open room" + `ProfileMenu`), 4 **free** step tabs (Category → Topic → Game → Teams, ✓ on visited ones), keyed step panel, footer Back / Next / **Open room**. Step, chosen category and class calculator are local state; every value shown comes from `room`. Busy ref against double opens |
+| `multiplayer/setup/` | Steps: `CategoryStep` (group cards), `TopicStep` (topic cards), `GameStep` (reading / answer / start times as segmented `Tabs`), `TeamsStep` (class calculator "students + per team → Apply", manual Teams / Max selects, team chips with members, 🎲), `QuickStart` (⚡ "Same as last time": Open room now / Same settings, new topic — teams untouched while players wait). `anim.ts`: shared GSAP helpers `staggerIn`, `pulse`, `popIn`, `ring` |
+| `multiplayer/Tabs.tsx` | shadcn-Tabs-inspired segmented control (no shadcn): pill track, white indicator sliding with GSAP, ARIA tabs, ←/→/Home/End; optional step number → ✓ |
+| `multiplayer/ProfileMenu.tsx` | "👩‍🏫 Host ▾" dropdown: (after a game) ✨ Start over in a new room, Cancel room (confirm when players are in), Log out |
+| `multiplayer/teamMath.ts`, `setupPrefs.ts` | `splitClass(students, perTeam)` → 2–10 teams × 1–6 (23/3 → 8×3); last setup in `localStorage["jeopardy-setup-last"]` for Quick start + calculator |
 | `multiplayer/HostLobby.tsx` | Waiting room (status `lobby`): QR + URL + code, settings summary, team cards, Start game → last-call countdown with Start now / Cancel, Settings (back to setup), Close room |
 | `multiplayer/HostGame.tsx` | Routes by status (`HostSetup` / `HostLobby` / question / board / `GameOverSplash` → `EndScreen`); `h-dvh` layout, sidebar + inset board, `ResultToast` |
 | `multiplayer/HostQuestionView.tsx` | Host question screen (keyed per tile), one viewport, no scrolling: top bar (category · value, ⭐ Final question badge, compact countdowns), auto-fitting question/code (`useFitText`, em-based children), 2×2 options grid, bottom bar (status left; one main action right: "Show options now" → "Show answer" → yellow "Next question →" / "🏆 See final results" + questions-left counter). **Enter / →** presses the main button (busy ref swallows doubles). Holds the clock logic: reading/answer countdowns, 1 s close grace, auto-reveal when all answered, `useBots` |
 | `multiplayer/JoinQr.tsx` | Canvas QR for `${origin}/join?code=ABCD` (package `qrcode`) |
 | `multiplayer/PlayerGame.tsx` | Phone: `TeamPicker` (pick one of the host's teams; shows the start countdown), `AnswerPicker` (options + countdown + result) |
 | `multiplayer/JoinScreen.tsx`, `HomeScreen.tsx`, `ui.tsx` | Join form (code prefilled from the QR link, still editable), home, shared Tailwind classes (`primaryButton`, `linkButton`, `input`, `Screen`, `Message` with optional `backLabel`) |
+| `multiplayer/debug.ts`, `debugReports.ts`, `debugSwitch.ts`, `DebugConsole.tsx`, `DebugPanel.tsx` | **Debug mode, centralized on the teacher's screen.** Switch: "🐞 Debug mode" in the profile menu (setup + lobby) or the lobby's "🐞 Debug: off" link → `setRoomDebug` sets the optional `room.debug`. While on: every device logs (`isLogging()`; `useRoom` restarts its listener with metadata), each phone's `DebugReporter` (in `PlayerGame`, tiny 🐞 dot) writes `rooms/{code}/debug/{playerId}` on view changes (≤1/s) + 5 s heartbeat (`startReporting`), and the host shows the lazy **🐞 DEBUG · console** (bottom-left): phones sorted by trouble (🔴 silent >12 s / error, 🟡 behind the room >3 s or from cache, ⚪ no report), host log, 📋 Copy everything, 🔄 Check server (`fetchRoom`), 🔌 Reconnect host, 🧹 Clear, Turn debug off (clears reports). `newGame` keeps the switch, New room starts off; `deleteRoom` clears reports (best effort). Fallback: `?debug=1` on one device → per-device `DebugPanel` (bottom-right). Debug never touches game rules |
 | `multiplayer/HowToPlay.tsx` | "❓ How to play · Cómo jugar" link + bilingual instructions overlay (6 steps, ES\|EN toggle, **Spanish default**, remembered in `localStorage["jeopardy-lang"]`). On home, join form and the player's team picker |
 
 Firebase setup lives outside the folder: `src/lib/firebase.ts` (exports `db`), `firebase.json`, `.firebaserc`, `firestore.rules`.
@@ -96,13 +101,13 @@ Room = {
 }
 ```
 
-Status flow: `setup` → `openRoom` → `lobby` (⇄ `backToSetup`) → `startCountdown` → `startGame` (loads questions, builds board, keeps only teams with players) → `board` ⇄ (`openTile` → `question` → `closeTile`) → `end` when every tile is used → `backToLobby`.
+Status flow: `setup` → `openRoom` → `lobby` (⇄ `backToSetup`) → `startCountdown` → `startGame` (loads questions, builds board, keeps only teams with players) → `board` ⇄ (`openTile` → `question` → `closeTile`) → `end` when every tile is used → host picks **`newGame`** (back to `setup`, same players on the same teams, scores 0; tops up to 3 teams if none are left) or **New room** (`createRoom` + `applySettings` with the old settings, navigate, then `deleteRoom` the old one). `backToLobby` is kept for the round test. `applySettings` writes several settings in one `mutate`, ignoring values outside the `*_CHOICES` / unknown topics.
 
 Every room write goes through `mutate(code, room => newRoom)`, which runs a **Firestore transaction** and `tx.set`s the whole document. That's what guarantees one answer per team when teammates tap together, and points given exactly once when two reveals race. Keep using `mutate` for new actions.
 
 ## Game rules (decided with the user)
 
-- **Setup** (host only, code hidden; `joinRoom` throws `ROOM_NOT_OPEN`): **topic**, **reading time** (0/5/10/15 s, default 10), **answer time** (15/20/30 s, default 20), **number of teams** (2–10, default 3), **max players per team** (1–6, default 3), **start countdown** (10/15/30/60 s, default 30). Teams get random color + animal names ("Red Fox"); "🎲 New names" rerolls them (ids stay). **Open room** → lobby.
+- **Setup** (host only, code hidden; `joinRoom` throws `ROOM_NOT_OPEN`): **topic**, **reading time** (0/5/10/15 s, default 10), **answer time** (15/20/30 s, default 20), **number of teams** (2–10, default 3), **max players per team** (1–6, default 3), **start countdown** (10/15/30/60 s, default 30). Teams get random color + animal names ("Red Fox"); "🎲 New names" rerolls them (ids stay). **Open room** → lobby. Steps are freely clickable; the class calculator (students + per team) fills Teams / Max, which stay editable by hand. Phones in a room during setup see a "Get ready! 🎮" card with the team they keep.
 - **Lobby / waiting room**: big screen shows the URL, the code and a QR (`/join?code=ABCD`, code still typeable). Players **pick** a team from their phone (tapping another one moves them; a player is on exactly one team) and wait; no confirmation step. Lowering the count removes teams from the end and unassigns their players; lowering the max doesn't move anyone, it blocks Start until they move. "Settings" goes back to setup (players stay, new joins paused).
 - **Start**: enabled with ≥2 teams that have players and none over the max (`startProblem`). Pressing it runs `startCountdown` (`startSeconds`, shown on the big screen and phones as a last call to pick a team) with **Start now** and **Cancel**. When it ends, `startGame` keeps the teams that have players; **empty teams are eliminated** (no points, no podium). Players still without a team stay in the room and can join a team with space mid-game. `startGame` throws if fewer than 2 teams have players; the lobby shows the message and cancels the countdown.
 - Host picks category + value; the question (and `code` snippet) appears **alone** on the big screen and phones for the **reading time** ("Options in N s"). When the host screen's countdown ends (or "Show options now"), `showOptions` sets `optionsAt` and the options appear on every device at once — no phone clock involved — and the **answer countdown** starts. `answer()` rejects taps while `optionsAt` is null. With reading time 0 the options show immediately.
@@ -118,7 +123,7 @@ Every room write goes through `mutate(code, room => newRoom)`, which runs a **Fi
 - Players can join mid-game and pick any team that isn't full; the team count and names can only change before the game (setup or lobby). Teams never vanish on their own (only empty ones at start).
 - A player's "Leave game" (and the closed-room / kicked messages) goes back to **the join form with the code prefilled**, not home.
 - Mid-game, a team whose **last member leaves** vanishes (score included, inside `leaveRoom`'s transaction); when **no team has players left** the room goes to `end` and the end screens show "Everyone left the game" instead of a winner. Only the explicit Leave button triggers this — a closed browser never says goodbye (presence detection is a backlog idea).
-- Game over → podium (host: with member names; phones: compact).
+- Game over → podium (host: with member names; phones: compact). Then the **teacher decides**: same room (players wait on their teams, no re-join) or a new room (new code; old phones get "The host closed this room").
 
 ## Firebase
 
@@ -149,6 +154,13 @@ Every room write goes through `mutate(code, room => newRoom)`, which runs a **Fi
 **Deploy:** `npm run deploy` (build + Hosting only) or `npm run deploy:all` (also Firestore rules and indexes). Build runs `tsc -b` first, so any unused import anywhere in `src/` blocks deployment.
 
 ## Gotchas
+
+- **The live push can be late.** Measured in room LLGU: `showOptions` committed in 0.4 s, but its `onSnapshot` arrived 14–26 s late on every device (host included) while writes kept working. Not a Spark quota issue (quotas fail, they don't delay). So devices don't rely on the push alone. `mutate` stamps `rev` (+1 per real write; a no-op change writes nothing) and publishes the committed room to this tab (`subscribeRoomUpdates`). `fetchRoom` (read-only transaction, always fresh) publishes too. `useRoom` keeps the highest `rev` (`acceptCopy`; rev-0 rooms follow the push), does one read on visible/online. Phones read every 2 s once their reading/answer bar ended + 2 s (`useServerCheck` in `AnswerPicker`). The host reads every 3 s while answers come in. `CLOSE_GRACE_MS` is 3 s. Debug logs tag `push` / `via own write` / `via check` and "push late by X s".
+- **`rev` needs the rules first**: with rules that don't allow `rev`, every `mutate` is rejected (the whole game breaks). Deploy `firestore.rules`, run `npm run test:jeopardy`, then deploy the app.
+
+- **Debug rules before debug app**: `firestore.rules` must allow the `debug` room key and the `rooms/{code}/debug/{playerId}` subcollection. Deploy rules first; with old rules only the debug switch fails (alert), the game is unaffected because nothing else writes those.
+
+- **A phone can stop receiving room updates** (seen in testing: stuck on "Options in 0 s" while others answered). Investigate with debug mode on the phone. Server truth: `fetchRoom` uses a read-only **transaction**, because `getDocFromServer` can answer from an already-open listener's (lagging) view — verified in Node: right after a commit it returned the doc without the new player.
 
 - Changing the `Room` shape breaks rooms created before the change. Tell the user to host a new room.
 - **Never compare a room timestamp with a phone's `Date.now()`**: phone clocks can be seconds off (it made bars end early and taps get rejected in class). Room timestamps come from the host's clock and are read only by the host screen; phones use `LocalCountdown`.

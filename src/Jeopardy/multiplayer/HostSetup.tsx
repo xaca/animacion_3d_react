@@ -1,151 +1,249 @@
-import { useState } from "react";
+import gsap from "gsap";
+import { useLayoutEffect, useRef, useState } from "react";
 import { GROUPS, TOPICS } from "../topics";
-import {
-    openRoom,
-    READ_SECONDS_CHOICES,
-    rerollTeamNames,
-    setMaxTeamSize,
-    setReadSeconds,
-    setStartSeconds,
-    setTeamCount,
-    setTimerSeconds,
-    setTopic,
-    START_SECONDS_CHOICES,
-    TEAM_COUNT_CHOICES,
-    TEAM_SIZE_CHOICES,
-    TIMER_CHOICES,
-    type Room,
-} from "./roomService";
-import { linkButton, primaryButton, Screen } from "./ui";
+import { MOTION } from "./panelMode";
+import { toggleRoomDebug } from "./debugSwitch";
+import ProfileMenu, { type MenuItem } from "./ProfileMenu";
+import { applySettings, openRoom, type Room } from "./roomService";
+import { loadLastSetup, saveLastSetup, type LastSetup } from "./setupPrefs";
+import { pulse, staggerIn } from "./setup/anim";
+import CategoryStep from "./setup/CategoryStep";
+import GameStep from "./setup/GameStep";
+import QuickStart from "./setup/QuickStart";
+import TeamsStep from "./setup/TeamsStep";
+import TopicStep from "./setup/TopicStep";
+import Tabs from "./Tabs";
 
 type Props = {
     room: Room;
-    onExit: () => void;
+    onExit: () => void; // deletes the room and goes home
     onLogout: () => void;
+    onNewRoom: () => void; // replaces this room with a fresh one (players are dropped)
 };
 
-const select = "bg-white text-black px-3 py-1";
+const STEPS = ["Category", "Topic", "Game", "Teams"];
+const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
 
-// Host-only configuration. The code is hidden on purpose: players join from the lobby.
-export default function HostSetup({ room, onExit, onLogout }: Props) {
-    // Topics come grouped (Coding, Design…); start on the selected topic's group
+// Host-only configuration as four free steps (tabs). The code is hidden on purpose:
+// players join from the lobby. Every value shown comes from the live room; the step,
+// the chosen category and the class calculator are local to this screen.
+export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) {
+    const [last] = useState<LastSetup | null>(loadLastSetup);
+    const [step, setStep] = useState(0);
+    const [visited, setVisited] = useState<Set<number>>(() => new Set([0]));
     const [group, setGroup] = useState(() => TOPICS.find((t) => t.id === room.topic)?.group ?? GROUPS[0].id);
+    const [students, setStudents] = useState(() => last?.students ?? room.teams.length * room.maxTeamSize);
+    const [perTeam, setPerTeam] = useState(() => clamp(last?.perTeam ?? room.maxTeamSize, 2, 6));
+    const [busy, setBusy] = useState(false);
+    const busyRef = useRef(false);
+
+    const players = Object.values(room.players);
+    const topic = TOPICS.find((t) => t.id === room.topic);
+
+    function goTo(next: number) {
+        const to = clamp(next, 0, STEPS.length - 1);
+        setStep(to);
+        setVisited((v) => (v.has(to) ? v : new Set(v).add(to)));
+    }
+
+    // One action at a time: double clicks must not open the room twice
+    async function run(action: () => Promise<void>) {
+        if (busyRef.current) return;
+        busyRef.current = true;
+        setBusy(true);
+        try {
+            await action();
+        } catch (e) {
+            console.error("Setup action failed", e);
+            alert("Something went wrong. Check your connection and try again.");
+        } finally {
+            busyRef.current = false;
+            setBusy(false);
+        }
+    }
+
+    const open = () =>
+        run(async () => {
+            saveLastSetup({
+                topic: room.topic,
+                readSeconds: room.readSeconds,
+                timerSeconds: room.timerSeconds,
+                startSeconds: room.startSeconds,
+                teamCount: room.teams.length,
+                maxTeamSize: room.maxTeamSize,
+                students,
+                perTeam,
+            });
+            await openRoom(room.code);
+        });
+
+    // Quick start: the saved setup in one write. With players waiting their teams stay as they are.
+    const quickSettings = (s: LastSetup) => ({
+        readSeconds: s.readSeconds,
+        timerSeconds: s.timerSeconds,
+        startSeconds: s.startSeconds,
+        ...(players.length > 0 ? {} : { teamCount: s.teamCount, maxTeamSize: s.maxTeamSize }),
+    });
+    const quickOpen = (s: LastSetup) =>
+        run(async () => {
+            await applySettings(room.code, { topic: s.topic, ...quickSettings(s) });
+            saveLastSetup(s);
+            await openRoom(room.code);
+        });
+    const quickNewTopic = (s: LastSetup) =>
+        run(async () => {
+            await applySettings(room.code, quickSettings(s));
+            setStudents(s.students);
+            setPerTeam(clamp(s.perTeam, 2, 6));
+            goTo(1);
+        });
+
+    function calc(n: number, per: number) {
+        setStudents(n);
+        setPerTeam(per);
+    }
+
+    const confirmDrop = () => players.length === 0 || confirm(`${players.length} players will be disconnected. Continue?`);
+    const menu: MenuItem[] = [
+        { label: "🐞 Debug mode", on: room.debug === true, onClick: () => toggleRoomDebug(room.code, room.debug !== true) },
+        ...(players.length > 0 ? [{ label: "✨ Start over in a new room", onClick: () => confirmDrop() && onNewRoom() }] : []),
+        { label: "Cancel room", onClick: () => confirmDrop() && onExit(), danger: true, separatorBefore: true },
+        { label: "Log out", onClick: onLogout, separatorBefore: true },
+    ];
+
+    // Entrance: header and tabs fade down once
+    const head = useRef<HTMLDivElement>(null);
+    useLayoutEffect(() => {
+        const tween = gsap.fromTo(
+            head.current!.children,
+            { autoAlpha: 0, y: -14 },
+            { autoAlpha: 1, y: 0, duration: 0.35 * MOTION, stagger: 0.06 * MOTION, ease: "power2.out", clearProps: "transform,opacity,visibility" }
+        );
+        return () => {
+            tween.kill();
+        };
+    }, []);
+
+    // Step content slides in from the side we're moving toward (from below on the first one).
+    // The panel is keyed by step, so a fast click just starts the next panel's tween.
+    const panel = useRef<HTMLDivElement>(null);
+    const prevStep = useRef<number | null>(null);
+    useLayoutEffect(() => {
+        const dir = prevStep.current === null ? 0 : Math.sign(step - prevStep.current);
+        prevStep.current = step;
+        if (!panel.current) return;
+        const tween = staggerIn(panel.current.querySelectorAll(".su-item"), dir);
+        return () => {
+            tween.kill();
+        };
+    }, [step]);
+
+    const steps = STEPS.map((label, i) => ({ value: i, label, done: visited.has(i) && i !== step }));
+    const footerButton = "font-bold text-xl px-5 py-2 rounded-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed";
 
     return (
-        <Screen>
-            <h1 className="text-4xl font-bold">Set up the game</h1>
+        <div className="h-dvh flex flex-col bg-[#2a3698] text-white text-center overflow-hidden">
+            <div ref={head} className="shrink-0 flex flex-col items-center gap-3 px-4 pt-4">
+                <header className="w-full flex flex-wrap items-center justify-between gap-3">
+                    <h1 className="text-3xl md:text-4xl font-bold">Set up the game</h1>
+                    <div className="flex flex-wrap items-center justify-center gap-2 text-lg">
+                        <Summary text={topic?.name ?? room.topic} strong />
+                        <Summary text={`read ${room.readSeconds} s · answer ${room.timerSeconds} s`} />
+                        <Summary text={`${room.teams.length} teams × ${room.maxTeamSize}`} />
+                        {step < STEPS.length - 1 && (
+                            <button
+                                type="button"
+                                disabled={busy}
+                                onClick={open}
+                                className="ml-1 bg-white text-[#2a3698] font-bold px-3 py-1 rounded-lg cursor-pointer hover:bg-yellow-300 disabled:opacity-50"
+                            >
+                                Open room →
+                            </button>
+                        )}
+                    </div>
+                    <ProfileMenu items={menu} />
+                </header>
+                <Tabs label="Setup steps" idBase="setup" items={steps} value={step} onChange={goTo} big />
+            </div>
 
-            <div className="flex flex-wrap justify-center gap-1">
-                {GROUPS.map((g) => (
-                    <button
-                        key={g.id}
-                        onClick={() => setGroup(g.id)}
-                        className={`px-4 py-2 font-bold rounded-t-lg cursor-pointer ${
-                            group === g.id ? "bg-yellow-300 text-black" : "bg-white/10 hover:bg-white/25"
-                        }`}
-                    >
-                        {g.name}
+            <div
+                ref={panel}
+                key={step}
+                role="tabpanel"
+                id="setup-panel"
+                aria-labelledby={`setup-tab-${step}`}
+                className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center gap-4 px-4 py-5"
+            >
+                {step === 0 && (
+                    <>
+                        {players.length > 0 && (
+                            <p className="su-item bg-yellow-300 text-black font-bold text-xl rounded-xl px-5 py-2">
+                                🎉 {players.length} {players.length === 1 ? "player is" : "players are"} waiting in room{" "}
+                                <span className="tracking-widest">{room.code}</span> — pick the next topic
+                            </p>
+                        )}
+                        {last && (
+                            <QuickStart
+                                last={last}
+                                keepTeams={players.length > 0}
+                                busy={busy}
+                                onOpenNow={() => quickOpen(last)}
+                                onNewTopic={() => quickNewTopic(last)}
+                            />
+                        )}
+                        <CategoryStep
+                            group={group}
+                            topic={room.topic}
+                            onPick={(g) => {
+                                setGroup(g);
+                                goTo(1);
+                            }}
+                        />
+                    </>
+                )}
+                {step === 1 && <TopicStep room={room} group={group} onChangeGroup={() => goTo(0)} />}
+                {step === 2 && <GameStep room={room} />}
+                {step === 3 && <TeamsStep room={room} students={students} perTeam={perTeam} onCalc={calc} />}
+            </div>
+
+            <footer className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-t border-white/10">
+                <button type="button" disabled={step === 0} onClick={() => goTo(step - 1)} className={`${footerButton} bg-white/10 hover:bg-white/20`}>
+                    ← Back
+                </button>
+                <span className="opacity-70 hidden sm:block">
+                    Step {step + 1} of {STEPS.length}
+                </span>
+                {step < STEPS.length - 1 ? (
+                    <button type="button" onClick={() => goTo(step + 1)} className={`${footerButton} bg-white text-[#2a3698] hover:bg-yellow-300`}>
+                        Next →
                     </button>
-                ))}
-            </div>
-
-            <div className="flex flex-wrap justify-center gap-3 max-w-3xl">
-                {TOPICS.filter((t) => t.group === group).map((topic) => (
-                    <button
-                        key={topic.id}
-                        onClick={() => setTopic(room.code, topic.id)}
-                        className={`w-40 p-3 text-left cursor-pointer border-4 ${
-                            room.topic === topic.id
-                                ? "bg-yellow-300 text-black border-black"
-                                : "bg-white text-[#2a3698] border-transparent hover:border-yellow-300"
-                        }`}
-                    >
-                        <span className="block font-bold text-lg leading-tight">{topic.name}</span>
-                        <span className="block text-sm opacity-80 mt-1">{topic.tagline}</span>
+                ) : (
+                    <button type="button" disabled={busy} onClick={open} className={`${footerButton} bg-yellow-300 text-black hover:bg-white text-2xl`}>
+                        {busy ? "Opening…" : "Open room →"}
                     </button>
-                ))}
-            </div>
+                )}
+            </footer>
+        </div>
+    );
+}
 
-            <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-2xl">
-                <label className="flex items-center gap-3">
-                    Reading time:
-                    <select value={room.readSeconds} onChange={(e) => setReadSeconds(room.code, Number(e.target.value))} className={select}>
-                        {READ_SECONDS_CHOICES.map((n) => (
-                            <option key={n} value={n}>
-                                {n} s
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                <label className="flex items-center gap-3">
-                    Answer time:
-                    <select value={room.timerSeconds} onChange={(e) => setTimerSeconds(room.code, Number(e.target.value))} className={select}>
-                        {TIMER_CHOICES.map((n) => (
-                            <option key={n} value={n}>
-                                {n} s
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                <label className="flex items-center gap-3">
-                    Teams:
-                    <select value={room.teams.length} onChange={(e) => setTeamCount(room.code, Number(e.target.value))} className={select}>
-                        {TEAM_COUNT_CHOICES.map((n) => (
-                            <option key={n} value={n}>
-                                {n}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                <label className="flex items-center gap-3">
-                    Max per team:
-                    <select value={room.maxTeamSize} onChange={(e) => setMaxTeamSize(room.code, Number(e.target.value))} className={select}>
-                        {TEAM_SIZE_CHOICES.map((n) => (
-                            <option key={n} value={n}>
-                                {n}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                <label className="flex items-center gap-3">
-                    Start countdown:
-                    <select value={room.startSeconds} onChange={(e) => setStartSeconds(room.code, Number(e.target.value))} className={select}>
-                        {START_SECONDS_CHOICES.map((n) => (
-                            <option key={n} value={n}>
-                                {n} s
-                            </option>
-                        ))}
-                    </select>
-                </label>
-            </div>
-            <p className="opacity-80 max-w-xl">
-                Each question is shown alone for the reading time, then the options appear and the answer time starts.
-                When you press Start, players get the start countdown as a last call to pick a team; teams still empty are left out.
-            </p>
-
-            <div className="flex flex-wrap justify-center items-center gap-3 max-w-4xl">
-                {room.teams.map((team) => (
-                    <span key={team.id} className="bg-white text-black font-bold px-3 py-1 flex items-center gap-2">
-                        <span className="inline-block w-4 h-4" style={{ background: team.color }} />
-                        {team.name}
-                    </span>
-                ))}
-                <button className={linkButton} onClick={() => rerollTeamNames(room.code)}>
-                    🎲 New names
-                </button>
-            </div>
-
-            <button className={primaryButton} onClick={() => openRoom(room.code)}>
-                Open room →
-            </button>
-            <div className="flex gap-6">
-                <button className={linkButton} onClick={onExit}>
-                    Cancel
-                </button>
-                <button className={linkButton} onClick={onLogout}>
-                    Log out
-                </button>
-            </div>
-        </Screen>
+// Summary chip in the header; pulses when its value changes
+function Summary({ text, strong }: { text: string; strong?: boolean }) {
+    const el = useRef<HTMLSpanElement>(null);
+    const mounted = useRef(false);
+    useLayoutEffect(() => {
+        if (!mounted.current) {
+            mounted.current = true;
+            return;
+        }
+        const tween = pulse(el.current);
+        return () => {
+            tween.kill();
+        };
+    }, [text]);
+    return (
+        <span ref={el} className={`rounded-full px-3 py-1 ${strong ? "bg-yellow-300 text-black font-bold" : "bg-white/10"}`}>
+            {text}
+        </span>
     );
 }

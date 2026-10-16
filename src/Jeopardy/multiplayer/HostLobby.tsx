@@ -1,17 +1,20 @@
 import { useRef, useState } from "react";
 import Countdown from "../Countdown";
 import { TOPICS } from "../topics";
+import { toggleRoomDebug } from "./debugSwitch";
 import JoinQr from "./JoinQr";
+import ProfileMenu, { type MenuItem } from "./ProfileMenu";
 import { addBot, backToSetup, cancelCountdown, removeBots, rerollTeamNames, startCountdown, startGame, startProblem, type Room } from "./roomService";
 import { linkButton, primaryButton, Screen } from "./ui";
 
 type Props = {
     room: Room;
     onExit: () => void;
+    onLogout: () => void;
 };
 
 // Waiting room on the big screen: how to join, teams filling up, Start with a last-call countdown.
-export default function HostLobby({ room, onExit }: Props) {
+export default function HostLobby({ room, onExit, onLogout }: Props) {
     const [starting, setStarting] = useState(false);
     const [error, setError] = useState("");
     const players = Object.values(room.players);
@@ -39,9 +42,24 @@ export default function HostLobby({ room, onExit }: Props) {
     }
 
     const topic = TOPICS.find((t) => t.id === room.topic)?.name ?? room.topic;
+    const debug = room.debug === true;
+    const humans = players.filter((p) => !p.bot).length;
+    const menu: MenuItem[] = [
+        { label: "🐞 Debug mode", on: debug, onClick: () => toggleRoomDebug(room.code, !debug) },
+        {
+            label: "Close room",
+            danger: true,
+            separatorBefore: true,
+            onClick: () => (humans === 0 || confirm(`${humans} players will be disconnected. Continue?`)) && onExit(),
+        },
+        { label: "Log out", onClick: onLogout },
+    ];
 
     return (
         <Screen>
+            <div className="fixed top-3 right-3 z-30">
+                <ProfileMenu items={menu} />
+            </div>
             <div className="flex flex-wrap items-center justify-center gap-8">
                 <JoinQr code={room.code} />
                 <div className="flex flex-col items-center gap-2">
@@ -94,6 +112,10 @@ export default function HostLobby({ room, onExit }: Props) {
                             Remove test players
                         </button>
                     )}
+                    {/* Phones report what they see to the teacher's 🐞 console (for testing) */}
+                    <button className={linkButton} onClick={() => toggleRoomDebug(room.code, !debug)}>
+                        🐞 Debug: {debug ? "ON" : "off"}
+                    </button>
                 </div>
             )}
 
@@ -125,9 +147,6 @@ export default function HostLobby({ room, onExit }: Props) {
             <div className="flex gap-6">
                 <button className={linkButton} onClick={() => backToSetup(room.code)} disabled={counting}>
                     Settings
-                </button>
-                <button className={linkButton} onClick={onExit}>
-                    Close room
                 </button>
             </div>
         </Screen>

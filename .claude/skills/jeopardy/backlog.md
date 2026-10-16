@@ -34,6 +34,11 @@ teams, countdown, podium). Roughly ordered by value for a classroom.
 - Mid-game leavers: a team vanishes (with its points) when its last member leaves; all teams gone → "Everyone left the game" end screen. Rail tooltip z-order/stacking fix.
 - Question screen rebuilt (`HostQuestionView`): fits one viewport with auto-shrinking text (`useFitText`), top-bar countdowns, bottom bar with one main action (yellow Next/Finish, Enter/→ shortcut, questions-left counter), ⭐ Final question badge, GameOverSplash + animated podium with confetti. Sidebar scrollbar removed (compact rows from 6 teams). +/- hint gone.
 
+## Done in v4 (2026-10-15)
+
+- 8 new topics (50 each): Technology (in the AI tab, renamed 🤖 Tech & AI), Video Games and Books (🎉 Popular Culture), Rap & Hip-Hop, Reggaeton, Pop, Rock (new 🎵 Music tab), Sports with soccer, basketball and NBA/NCAA/NFL/NHL/FIFA team names (new ⚽ Sports tab). 19 topics / 1025 questions.
+- Host setup redesign: 4 free step tabs (shadcn-Tabs look, plain Tailwind + GSAP), class calculator (students → teams, manual selects kept), ⚡ Quick start from the last setup, profile menu (Cancel room / Log out / new room), after a game the teacher picks "Next game, same room" (`newGame`, players keep their teams) or "New room"; phones show a "Get ready!" card meanwhile.
+
 ## Ideas parked (decided against for now)
 
 - Speed bonus for the fastest correct team, measured as reaction time on each phone (from options shown to tap). Fair across network delay but trusts the phone; could be an option in Setup.

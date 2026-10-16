@@ -1,13 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import LocalGame from "./LocalGame";
 import HomeScreen from "./multiplayer/HomeScreen";
 import HostGame from "./multiplayer/HostGame";
 import HostLogin from "./multiplayer/HostLogin";
 import JoinScreen from "./multiplayer/JoinScreen";
 import PlayerGame from "./multiplayer/PlayerGame";
+import { localDebug } from "./multiplayer/debug";
 import { isHostUnlocked, lockHost } from "./multiplayer/hostAuth";
 import { createRoom } from "./multiplayer/roomService";
 import { Message } from "./multiplayer/ui";
+
+// Per-device debug window (?debug=1, fallback for the teacher's console): downloaded only then
+const DebugPanel = lazy(() => import("./multiplayer/DebugPanel"));
 
 // Each screen has its own URL:
 //   /             home (choose a mode)
@@ -46,6 +50,19 @@ function viewFromPath(url: string): View {
 }
 
 export default function Jeopardy() {
+    const screen = <Screens />;
+    if (!localDebug) return screen;
+    return (
+        <>
+            {screen}
+            <Suspense fallback={null}>
+                <DebugPanel />
+            </Suspense>
+        </>
+    );
+}
+
+function Screens(): ReactNode {
     const [view, setView] = useState<View>(() => viewFromPath(location.pathname + location.search));
     const [hostUnlocked, setHostUnlocked] = useState(isHostUnlocked);
 
@@ -91,7 +108,10 @@ export default function Jeopardy() {
             return <NewRoom onCreated={(code) => go(`/host/${code}`, true)} onFailed={goHome} />;
         case "host":
             if (!hostUnlocked) return <HostLogin onUnlock={() => setHostUnlocked(true)} onBack={goHome} />;
-            return <HostGame key={view.code} code={view.code} onExit={goHome} onLogout={logout} />;
+            // replace: "New room" swaps rooms; back must not return to the deleted one
+            return (
+                <HostGame key={view.code} code={view.code} onExit={goHome} onLogout={logout} onNewRoom={(code) => go(`/host/${code}`, true)} />
+            );
         case "player": {
             // Opening /play/CODE without having joined from this tab: send them to the join form
             if (!view.playerId) return <JoinScreen initialCode={view.code} onBack={goHome} onJoined={joined} />;

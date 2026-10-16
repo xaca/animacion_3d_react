@@ -1,5 +1,5 @@
 import gsap from "gsap";
-import { useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import Board from "../Board";
 import EndScreen from "../EndScreen";
 import GameOverSplash from "../GameOverSplash";
@@ -9,17 +9,21 @@ import HostQuestionView from "./HostQuestionView";
 import HostSetup from "./HostSetup";
 import ScorePanel from "./ScorePanel";
 import { MOTION, usePanelMode } from "./panelMode";
-import { backToLobby, deleteRoom, openTile, type Room } from "./roomService";
+import { applySettings, createRoom, deleteRoom, newGame, openTile, type Room } from "./roomService";
 import { Message } from "./ui";
 import { useRoom } from "./useRoom";
+
+// Teacher's debug console: downloaded only when the room's debug switch is on
+const DebugConsole = lazy(() => import("./DebugConsole"));
 
 type Props = {
     code: string;
     onExit: () => void;
     onLogout: () => void;
+    onNewRoom: (code: string) => void; // go to a freshly created room
 };
 
-export default function HostGame({ code, onExit, onLogout }: Props) {
+export default function HostGame({ code, onExit, onLogout, onNewRoom }: Props) {
     const room = useRoom(code);
     const [panelMode, setPanelMode] = usePanelMode();
 
@@ -33,23 +37,80 @@ export default function HostGame({ code, onExit, onLogout }: Props) {
         if (status !== "end") setSplashDone(false);
     }
 
-    if (room === undefined) return <Message text="Loading…" />;
-    if (room === null) return <Message text="This room no longer exists." onBack={onExit} />;
+    // "🎮 Next game!" splash while the room goes back to setup
+    const [nextSplash, setNextSplash] = useState(false);
+
+    // Every screen goes through this, so the tree shape is the same with debug on or off
+    // (turning debug on never remounts the game)
+    const withDebug = (screen: ReactNode) => (
+        <>
+            {screen}
+            {room?.debug && (
+                <Suspense fallback={null}>
+                    <DebugConsole room={room} />
+                </Suspense>
+            )}
+        </>
+    );
+
+    if (nextSplash) return withDebug(<GameOverSplash text="🎮 Next game!" onDone={() => setNextSplash(false)} />);
+    if (room === undefined) return withDebug(<Message text="Loading…" />);
+    if (room === null) return withDebug(<Message text="This room no longer exists." onBack={onExit} />);
 
     async function closeRoom() {
         await deleteRoom(code);
         onExit();
     }
 
-    if (room.status === "setup") return <HostSetup room={room} onExit={closeRoom} onLogout={onLogout} />;
-    if (room.status === "lobby") return <HostLobby room={room} onExit={closeRoom} />;
+    async function sameRoom() {
+        setNextSplash(true);
+        try {
+            await newGame(code);
+        } catch (e) {
+            console.error("Could not start the next game", e);
+            alert("Could not start the next game. Check your connection and try again.");
+            setNextSplash(false);
+        }
+    }
+
+    // A fresh room with this room's settings; created before the old one is deleted, so a
+    // failure leaves the host where they were. We move first, then delete, so the host never
+    // sees "room no longer exists". Players of the old room see "room closed".
+    async function freshRoom(r: Room) {
+        const next = await createRoom();
+        await applySettings(next, {
+            topic: r.topic,
+            readSeconds: r.readSeconds,
+            timerSeconds: r.timerSeconds,
+            startSeconds: r.startSeconds,
+            teamCount: r.teams.length,
+            maxTeamSize: r.maxTeamSize,
+        });
+        onNewRoom(next);
+        await deleteRoom(code).catch((e) => console.error(`Could not delete room ${code}`, e));
+    }
+
+    const newRoom = () =>
+        freshRoom(room).catch((e) => {
+            console.error("Could not create a new room", e);
+            alert("Could not create a new room. Check your connection and try again.");
+        });
+
+    if (room.status === "setup") return withDebug(<HostSetup room={room} onExit={closeRoom} onLogout={onLogout} onNewRoom={newRoom} />);
+    if (room.status === "lobby") return withDebug(<HostLobby room={room} onExit={closeRoom} onLogout={onLogout} />);
     if (room.status === "end") {
-        if (!splashDone) return <GameOverSplash onDone={() => setSplashDone(true)} />;
+        if (!splashDone) return withDebug(<GameOverSplash onDone={() => setSplashDone(true)} />);
         const members = (i: number) =>
             Object.values(room.players)
                 .filter((p) => p.team === room.teams[i].id)
                 .map((p) => p.name);
-        return <EndScreen teams={room.teams} membersOf={members} onPlayAgain={() => backToLobby(code)} />;
+        return withDebug(
+            <EndScreen
+                teams={room.teams}
+                membersOf={members}
+                actions={<EndActions players={Object.keys(room.players).length} onSameRoom={sameRoom} onNewRoom={newRoom} onClose={closeRoom} />}
+            />
+        );
     }
 
     const active = room.activeTile;
@@ -58,7 +119,7 @@ export default function HostGame({ code, onExit, onLogout }: Props) {
 
     // Whole screen, no page scroll: score sidebar on the left, board (or question) in an
     // inset panel filling the rest
-    return (
+    return withDebug(
         <div className="h-dvh flex bg-[#1c2470] text-white overflow-hidden">
             <ScorePanel room={room} topic={topic} mode={panelMode} onMode={setPanelMode} />
             <main className="flex-1 min-w-0 min-h-0 p-2">
@@ -119,3 +180,79 @@ function ResultToast({ room }: { room: Room }) {
     );
 }
 
+
+type EndActionsProps = {
+    players: number;
+    onSameRoom: () => Promise<void>;
+    onNewRoom: () => Promise<void>;
+    onClose: () => Promise<void>;
+};
+
+// After the podium the teacher decides: same room (players stay on their teams) or a new
+// room (new code, players dropped). Rises in once the podium has finished. Enter = same room.
+function EndActions({ players, onSameRoom, onNewRoom, onClose }: EndActionsProps) {
+    const box = useRef<HTMLDivElement>(null);
+    const [busy, setBusy] = useState(false);
+    const busyRef = useRef(false);
+
+    async function run(action: () => Promise<void>) {
+        if (busyRef.current) return;
+        busyRef.current = true;
+        setBusy(true);
+        try {
+            await action();
+        } finally {
+            busyRef.current = false;
+            setBusy(false);
+        }
+    }
+    const runRef = useRef(run);
+    const sameRef = useRef(onSameRoom);
+    useEffect(() => {
+        runRef.current = run;
+        sameRef.current = onSameRoom;
+    });
+
+    useLayoutEffect(() => {
+        const tween = gsap.fromTo(
+            box.current,
+            { y: 24, autoAlpha: 0 },
+            { y: 0, autoAlpha: 1, delay: 2.2 * MOTION, duration: 0.4 * MOTION, ease: "back.out(1.7)", clearProps: "transform" }
+        );
+        return () => {
+            tween.kill();
+        };
+    }, []);
+
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) {
+            // A focused button handles its own Enter (e.g. "New room")
+            if (e.key !== "Enter" || e.repeat || e.target instanceof HTMLButtonElement) return;
+            e.preventDefault();
+            runRef.current(() => sameRef.current());
+        }
+        addEventListener("keydown", onKey);
+        return () => removeEventListener("keydown", onKey);
+    }, []);
+
+    const confirmed = () => players === 0 || confirm(`${players} ${players === 1 ? "player" : "players"} will be disconnected. Continue?`);
+    const button = "text-2xl font-bold px-6 py-3 rounded-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
+    return (
+        <div ref={box} className="flex flex-col items-center gap-3 opacity-0">
+            <div className="flex flex-wrap justify-center gap-3">
+                <button type="button" disabled={busy} onClick={() => run(onSameRoom)} className={`${button} bg-yellow-300 text-black hover:bg-white`}>
+                    🔁 Next game, same room
+                </button>
+                <button type="button" disabled={busy} onClick={() => confirmed() && run(onNewRoom)} className={`${button} bg-white text-[#2a3698] hover:bg-yellow-300`}>
+                    ✨ New room
+                </button>
+            </div>
+            <p className="text-sm opacity-70">
+                Same room: players stay on their teams. New room: a new code for a new group. (Enter = same room)
+            </p>
+            <button type="button" disabled={busy} onClick={() => run(onClose)} className="text-white underline opacity-80 hover:opacity-100 cursor-pointer">
+                Close room
+            </button>
+        </div>
+    );
+}

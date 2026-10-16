@@ -5,6 +5,8 @@ import { buildBoardFrom, loadQuestions } from "../questionService";
 import { TOPICS } from "../topics";
 import type { Team } from "../teams";
 import { pickTeamNames } from "../teamNames";
+import { isLogging, logEvent, setStatus } from "./debug";
+import { clearDebugReports } from "./debugReports";
 
 // setup: host configures, nobody can join yet. lobby: code shown, players join and get ready.
 export type RoomStatus = "setup" | "lobby" | "board" | "question" | "end";
@@ -38,6 +40,8 @@ export type Room = {
     revealed: boolean; // answer shown to everyone; also locks answers
     answers: Answer[];
     players: Record<string, Player>;
+    debug?: boolean; // teacher's debug switch: phones report to the debug console. Missing = off
+    rev?: number; // +1 on every write (mutate); devices keep the copy with the highest rev. Missing = 0
 };
 
 export const TIMER_CHOICES = [15, 20, 30];
@@ -59,12 +63,58 @@ const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 
 const roomRef = (code: string) => doc(db, "rooms", code);
 
+// Where a device got a copy of the room from. The live push can arrive late (seen: 14–26 s
+// for one change while writes kept working), so devices also use their own confirmed writes
+// and direct server reads, and keep whichever copy has the highest rev (see useRoom).
+export type RoomSource = "push" | "own write" | "check";
+type RoomListener = (room: Room | null, source: RoomSource) => void;
+const channels = new Map<string, Set<RoomListener>>();
+
+export function subscribeRoomUpdates(code: string, cb: RoomListener): () => void {
+    let set = channels.get(code);
+    if (!set) channels.set(code, (set = new Set()));
+    set.add(cb);
+    return () => {
+        set.delete(cb);
+        if (set.size === 0) channels.delete(code);
+    };
+}
+
+function publishRoom(code: string, room: Room | null, source: RoomSource) {
+    for (const cb of channels.get(code) ?? []) {
+        try {
+            cb(room, source);
+        } catch (e) {
+            console.error("Room listener failed", e);
+        }
+    }
+}
+
+export const revOf = (room: Room | null | undefined) => room?.rev ?? 0;
+
+// Should a device replace its copy (`before`) with `next`? Newest rev wins; rooms without
+// rev (rev 0) follow the push as before; only the push or a server read can say "deleted".
+export function acceptCopy(before: Room | null | undefined, next: Room | null, source: RoomSource): boolean {
+    if (next === null) return source !== "own write";
+    if (before === undefined || before === null) return true;
+    const rev = revOf(next);
+    return rev > revOf(before) || (rev === 0 && source === "push");
+}
+
 async function mutate(code: string, change: (room: Room) => Room) {
-    await runTransaction(db, async (tx) => {
+    const result = await runTransaction(db, async (tx) => {
         const snap = await tx.get(roomRef(code));
         if (!snap.exists()) throw new Error(`Room ${code} not found`);
-        tx.set(roomRef(code), change(snap.data() as Room));
+        const room = snap.data() as Room;
+        const next = change(room);
+        // Nothing to change (e.g. a second answer from the same team): no write, but the
+        // fresh copy we just read is still worth passing on
+        if (next === room) return { room, source: "check" as const };
+        const saved = { ...next, rev: revOf(room) + 1 };
+        tx.set(roomRef(code), saved);
+        return { room: saved, source: "own write" as const };
     });
+    publishRoom(code, result.room, result.source);
 }
 
 function randomId(length: number, letters = "abcdefghijklmnopqrstuvwxyz0123456789") {
@@ -74,6 +124,7 @@ function randomId(length: number, letters = "abcdefghijklmnopqrstuvwxyz012345678
 // ----- Reading -------------------------------------------------------------
 
 export function subscribeRoom(code: string, cb: (room: Room | null) => void): () => void {
+    if (isLogging()) return subscribeRoomDebug(code, cb);
     return onSnapshot(
         roomRef(code),
         (snap) => cb(snap.exists() ? (snap.data() as Room) : null),
@@ -82,6 +133,90 @@ export function subscribeRoom(code: string, cb: (room: Room | null) => void): ()
             cb(null);
         }
     );
+}
+
+// One-shot read straight from the server (debug "Check server now"). A read-only
+// transaction, not getDocFromServer: with a live listener open, getDocFromServer can
+// answer from that listener's view, so a stalled stream would look "up to date".
+// Transaction reads are separate requests, independent of the listener. Writes nothing.
+export async function fetchRoom(code: string): Promise<Room | null> {
+    const room = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(roomRef(code));
+        return snap.exists() ? (snap.data() as Room) : null;
+    });
+    publishRoom(code, room, "check");
+    return room;
+}
+
+// Short text of what a device sees, for the debug log
+export function describeRoom(room: Room | null): string {
+    if (!room) return "room missing";
+    const tile = room.activeTile ? `${room.activeTile.col},${room.activeTile.row}` : "-";
+    return `status=${room.status} tile=${tile} options=${room.optionsAt !== null ? "yes" : "no"} revealed=${room.revealed ? "yes" : "no"} answers=${room.answers.length} players=${Object.keys(room.players).length}`;
+}
+
+// Debug mode only: same listener plus metadata, so the log shows when the phone is
+// running from its cache (offline). Metadata-only changes are logged, not passed on,
+// so the game sees exactly the same updates as without debug mode.
+function subscribeRoomDebug(code: string, cb: (room: Room | null) => void): () => void {
+    let lastJson: string | null = null;
+    let lastTile = "";
+    logEvent("listen", `start ${code}`);
+    setStatus({ code, error: null });
+    const stop = onSnapshot(
+        roomRef(code),
+        { includeMetadataChanges: true },
+        (snap) => {
+            const room = snap.exists() ? (snap.data() as Room) : null;
+            const json = JSON.stringify(room);
+            const cache = snap.metadata.fromCache;
+            const summary = describeRoom(room);
+            if (json === lastJson) {
+                logEvent("meta", `cache=${cache ? "yes" : "no"} pending=${snap.metadata.hasPendingWrites ? "yes" : "no"}`);
+                setStatus({ fromCache: cache });
+                return;
+            }
+            lastJson = json;
+            const tile = room?.activeTile ? `${room.activeTile.col},${room.activeTile.row}` : "";
+            // What the device "sees" (summary, lastUpdateAt) is set by useRoom, which may already
+            // have a newer copy from its own write or a server check
+            const patch: Parameters<typeof setStatus>[0] = { fromCache: cache, error: null };
+            // New question: the host set readEndsAt = its now + reading time, so this is
+            // roughly host clock − this device's clock (minus the network delay)
+            if (room && tile && tile !== lastTile && room.readEndsAt !== null) {
+                patch.clockOffsetMs = room.readEndsAt - room.readSeconds * 1000 - Date.now();
+            }
+            lastTile = tile;
+            logEvent("push", `rev=${revOf(room)} ${summary} cache=${cache ? "yes" : "no"}`);
+            setStatus(patch);
+            cb(room);
+        },
+        (error) => {
+            console.error(`Could not load room ${code}`, error);
+            logEvent("error", `listener: ${error.code ?? ""} ${error.message}`);
+            setStatus({ error: `${error.code ?? ""} ${error.message}` });
+            cb(null);
+        }
+    );
+    return () => {
+        logEvent("listen", `stop ${code}`);
+        stop();
+    };
+}
+
+// Debug mode only: logs an action and whether Firestore confirmed it. Without debug
+// mode it just runs the action.
+async function traced(label: string, run: () => Promise<void>) {
+    if (!isLogging()) return run();
+    logEvent("send", label);
+    const t0 = Date.now();
+    try {
+        await run();
+        logEvent("ok", `${label} confirmed in ${Date.now() - t0} ms`);
+    } catch (e) {
+        logEvent("error", `${label} failed: ${e}`);
+        throw e;
+    }
 }
 
 // ----- Host actions --------------------------------------------------------
@@ -118,7 +253,16 @@ export async function createRoom(): Promise<string> {
 }
 
 export async function deleteRoom(code: string) {
+    // Debug reports live under the room; best effort, they're only test data
+    await clearDebugReports(code).catch(() => {});
     await deleteDoc(roomRef(code));
+}
+
+// Teacher's debug switch. Only this write sets the field, so rooms keep working with
+// rules that don't know it yet (only the switch would fail).
+export async function setRoomDebug(code: string, on: boolean) {
+    await mutate(code, (room) => ({ ...room, debug: on }));
+    if (!on) await clearDebugReports(code).catch(() => {});
 }
 
 function teamSize(room: Room, teamId: string): number {
@@ -190,22 +334,50 @@ export async function setReadSeconds(code: string, readSeconds: number) {
 const beforeGame = (room: Room) => room.status === "setup" || room.status === "lobby";
 
 // Adds teams at the end or removes them from the end; players on a removed team pick again.
+// Pure, so setTeamCount and applySettings share it.
+function withTeamCount(room: Room, count: number): Room {
+    if (count >= room.teams.length) {
+        return { ...room, teams: [...room.teams, ...newTeams(count - room.teams.length, room.teams)] };
+    }
+    const teams = room.teams.slice(0, count);
+    const kept = new Set(teams.map((t) => t.id));
+    return {
+        ...room,
+        teams,
+        players: Object.fromEntries(
+            Object.entries(room.players).map(([id, p]) => [id, p.team !== null && !kept.has(p.team) ? { ...p, team: null } : p])
+        ),
+    };
+}
+
 // Before the game only: mid-game the scores and answers refer to the current teams.
 export async function setTeamCount(code: string, count: number) {
+    await mutate(code, (room) => (!beforeGame(room) || count < 2 ? room : withTeamCount(room, count)));
+}
+
+export type SetupSettings = {
+    topic?: string;
+    readSeconds?: number;
+    timerSeconds?: number;
+    startSeconds?: number;
+    maxTeamSize?: number;
+    teamCount?: number;
+};
+
+// Several settings in one write (quick start, class calculator). Values outside the
+// usual choices (e.g. from an old saved setup) are ignored, so the room stays valid.
+export async function applySettings(code: string, s: SetupSettings) {
+    const ok = (v: number | undefined, choices: number[]): v is number => v !== undefined && choices.includes(v);
     await mutate(code, (room) => {
-        if (!beforeGame(room) || count < 2) return room;
-        if (count >= room.teams.length) {
-            return { ...room, teams: [...room.teams, ...newTeams(count - room.teams.length, room.teams)] };
-        }
-        const teams = room.teams.slice(0, count);
-        const kept = new Set(teams.map((t) => t.id));
-        return {
-            ...room,
-            teams,
-            players: Object.fromEntries(
-                Object.entries(room.players).map(([id, p]) => [id, p.team !== null && !kept.has(p.team) ? { ...p, team: null } : p])
-            ),
-        };
+        if (!beforeGame(room)) return room;
+        let next = { ...room };
+        if (s.topic !== undefined && TOPICS.some((t) => t.id === s.topic)) next.topic = s.topic;
+        if (ok(s.readSeconds, READ_SECONDS_CHOICES)) next.readSeconds = s.readSeconds;
+        if (ok(s.timerSeconds, TIMER_CHOICES)) next.timerSeconds = s.timerSeconds;
+        if (ok(s.startSeconds, START_SECONDS_CHOICES)) next.startSeconds = s.startSeconds;
+        if (ok(s.maxTeamSize, TEAM_SIZE_CHOICES)) next.maxTeamSize = s.maxTeamSize;
+        if (ok(s.teamCount, TEAM_COUNT_CHOICES)) next = withTeamCount(next, s.teamCount);
+        return next;
     });
 }
 
@@ -280,11 +452,13 @@ export async function openTile(code: string, col: number, row: number) {
 
 // Called by the host screen when its reading countdown ends, or by "Show options now"
 export async function showOptions(code: string) {
-    await mutate(code, (room) => {
-        if (room.status !== "question" || optionsVisible(room)) return room;
-        const now = Date.now();
-        return { ...room, optionsAt: now, questionEndsAt: now + room.timerSeconds * 1000 };
-    });
+    await traced("showOptions", () =>
+        mutate(code, (room) => {
+            if (room.status !== "question" || optionsVisible(room)) return room;
+            const now = Date.now();
+            return { ...room, optionsAt: now, questionEndsAt: now + room.timerSeconds * 1000 };
+        })
+    );
 }
 
 // Ends the question: locks answers, shows the correct option everywhere and gives the
@@ -292,16 +466,18 @@ export async function showOptions(code: string) {
 // all teams have answered, when its timer ends, or by "Show answer". Runs once: a
 // second call (e.g. timer and "all answered" at the same moment) changes nothing.
 export async function revealAnswer(code: string) {
-    await mutate(code, (room) => {
-        const tile = activeTileOf(room);
-        if (!tile || room.revealed) return room;
-        const winners = new Set(room.answers.filter((a) => a.correct).map((a) => a.team));
-        return {
-            ...room,
-            revealed: true,
-            teams: room.teams.map((t) => (winners.has(t.id) ? { ...t, score: t.score + tile.value } : t)),
-        };
-    });
+    await traced("revealAnswer", () =>
+        mutate(code, (room) => {
+            const tile = activeTileOf(room);
+            if (!tile || room.revealed) return room;
+            const winners = new Set(room.answers.filter((a) => a.correct).map((a) => a.team));
+            return {
+                ...room,
+                revealed: true,
+                teams: room.teams.map((t) => (winners.has(t.id) ? { ...t, score: t.score + tile.value } : t)),
+            };
+        })
+    );
 }
 
 export async function closeTile(code: string) {
@@ -319,6 +495,29 @@ export async function closeTile(code: string) {
             revealed: false,
             answers: [],
         };
+    });
+}
+
+// Next game in the same room: back to setup with the same players on the same teams
+// (scores reset), so nobody has to join or pick again. Ignored before a game started.
+export async function newGame(code: string) {
+    await mutate(code, (room) => {
+        if (beforeGame(room)) return room;
+        const next: Room = {
+            ...room,
+            status: "setup",
+            board: [],
+            teams: room.teams.map((t) => ({ ...t, score: 0 })),
+            startsAt: null,
+            activeTile: null,
+            readEndsAt: null,
+            optionsAt: null,
+            questionEndsAt: null,
+            revealed: false,
+            answers: [],
+        };
+        // Everyone left last game (no teams): start again from the default teams
+        return next.teams.length < 2 ? withTeamCount(next, DEFAULT_TEAM_COUNT) : next;
     });
 }
 
@@ -391,16 +590,18 @@ export async function leaveRoom(code: string, playerId: string) {
 // the window is open from the host's showOptions until the host's revealAnswer, which
 // keeps phones with wrong clocks or slower networks on equal terms.
 export async function answer(code: string, playerId: string, choice: string) {
-    await mutate(code, (room) => {
-        const player = room.players[playerId];
-        const tile = activeTileOf(room);
-        if (!tile || !player || player.team === null) return room;
-        if (!optionsVisible(room) || room.revealed) return room;
-        if (room.answers.some((a) => a.team === player.team)) return room;
+    await traced(`answer by ${playerId}: "${choice}"`, () =>
+        mutate(code, (room) => {
+            const player = room.players[playerId];
+            const tile = activeTileOf(room);
+            if (!tile || !player || player.team === null) return room;
+            if (!optionsVisible(room) || room.revealed) return room;
+            if (room.answers.some((a) => a.team === player.team)) return room;
 
-        const entry: Answer = { playerId, name: player.name, team: player.team, choice, correct: choice === tile.answer, at: Date.now() };
-        return { ...room, answers: [...room.answers, entry] };
-    });
+            const entry: Answer = { playerId, name: player.name, team: player.team, choice, correct: choice === tile.answer, at: Date.now() };
+            return { ...room, answers: [...room.answers, entry] };
+        })
+    );
 }
 
 // ----- Helpers for the screens ---------------------------------------------

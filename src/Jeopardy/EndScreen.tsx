@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Podium from "./Podium";
 import { rankTeams, type Team } from "./teams";
 
@@ -5,9 +6,10 @@ type Props = {
     teams: Team[];
     membersOf?: (teamIndex: number) => string[];
     onPlayAgain?: () => void;
+    actions?: ReactNode; // host: next-game choices instead of "Play again"
 };
 
-export default function EndScreen({ teams, membersOf, onPlayAgain }: Props) {
+export default function EndScreen({ teams, membersOf, onPlayAgain, actions }: Props) {
     const winners = rankTeams(teams)
         .filter((r) => r.place === 1)
         .map((r) => r.team.name);
@@ -19,7 +21,8 @@ export default function EndScreen({ teams, membersOf, onPlayAgain }: Props) {
                 {teams.length === 0 ? "Everyone left the game 🤷" : winners.length > 1 ? `Tie: ${winners.join(", ")}` : `${winners[0]} wins!`}
             </p>
             {teams.length > 0 && <Podium teams={teams} membersOf={membersOf} />}
-            {onPlayAgain && (
+            {actions}
+            {!actions && onPlayAgain && (
                 <button
                     onClick={onPlayAgain}
                     className="bg-white text-[#2a3698] text-2xl font-bold px-6 py-3 cursor-pointer hover:bg-yellow-300"

@@ -1,14 +1,18 @@
-import { useState } from "react";
+import gsap from "gsap";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LocalCountdown } from "../Countdown";
 import GameOverSplash from "../GameOverSplash";
+import { startReporting } from "./debugReports";
 import HowToPlay from "./HowToPlay";
 import Podium from "../Podium";
+import { MOTION } from "./panelMode";
 import { LETTERS } from "../questions";
-import { rankTeams } from "../teams";
+import { rankTeams, type Team } from "../teams";
 import { TOPICS } from "../topics";
-import { activeTileOf, answer, answerOf, answerProgress, chooseTeam, isLastTile, leaveRoom, optionsVisible, type Player, type Room } from "./roomService";
+import { activeTileOf, answer, APP_VERSION, answerOf, answerProgress, chooseTeam, isLastTile, leaveRoom, optionsVisible, type Player, type Room } from "./roomService";
 import { linkButton, Message, Screen } from "./ui";
 import { useRoom } from "./useRoom";
+import { useServerCheck } from "./useServerCheck";
 
 type Props = {
     code: string;
@@ -46,7 +50,7 @@ export default function PlayerGame({ code, playerId, onExit }: Props) {
             {hasTeam && (room.status === "board" || room.status === "question") && <MyScore room={room} teamId={myTeam.id} />}
 
             {room.status === "setup" ? (
-                <p className="text-3xl font-bold">The host is changing the settings… hang on.</p>
+                <SetupWait team={myTeam} />
             ) : !hasTeam || room.status === "lobby" ? (
                 <TeamPicker room={room} player={player} />
             ) : room.status === "question" && room.activeTile ? (
@@ -60,7 +64,71 @@ export default function PlayerGame({ code, playerId, onExit }: Props) {
             <button className={linkButton} onClick={leave}>
                 Leave game
             </button>
+            {room.debug && <DebugReporter code={code} player={player} teamName={myTeam?.name ?? null} />}
         </Screen>
+    );
+}
+
+// Teacher's debug switch is on: send what this phone sees to the teacher's console.
+// Only a small 🐞 dot shows here, so the tester knows it's reporting.
+function DebugReporter({ code, player, teamName }: { code: string; player: Player; teamName: string | null }) {
+    const who = useRef({ name: player.name, team: teamName });
+    useEffect(() => {
+        who.current = { name: player.name, team: teamName };
+    }, [player.name, teamName]);
+    useEffect(() => startReporting(code, player.id, () => who.current, APP_VERSION), [code, player.id]);
+    return (
+        <span aria-label="Debug reporting on" title="Debug reporting on" className="fixed bottom-2 left-2 text-sm opacity-60 pointer-events-none">
+            🐞
+        </span>
+    );
+}
+
+// The teacher is setting up (the next) game: players stay in the room and on their team,
+// so they only wait. Card pops in, team chip rings, dots bounce until the room opens.
+function SetupWait({ team }: { team: Team | undefined }) {
+    const root = useRef<HTMLDivElement>(null);
+    useLayoutEffect(() => {
+        const el = root.current!;
+        const tl = gsap.timeline();
+        tl.fromTo(el, { scale: 0.6, autoAlpha: 0 }, { scale: 1, autoAlpha: 1, duration: 0.45 * MOTION, ease: "back.out(1.7)", clearProps: "transform" });
+        const ring = el.querySelector(".sw-ring");
+        if (ring) tl.fromTo(ring, { scale: 1, autoAlpha: 0.9 }, { scale: 1.6, autoAlpha: 0, duration: 0.7 * MOTION, ease: "power2.out", repeat: 2, repeatDelay: 0.6 });
+        const dots = gsap.fromTo(
+            el.querySelectorAll(".sw-dot"),
+            { y: 0 },
+            { y: -8, duration: 0.35, ease: "power1.out", yoyo: true, repeat: MOTION ? -1 : 0, stagger: 0.12 }
+        );
+        return () => {
+            tl.kill();
+            dots.kill();
+        };
+    }, []);
+
+    return (
+        <div ref={root} className="flex flex-col items-center gap-4 opacity-0">
+            <p className="text-4xl font-bold">Get ready! 🎮</p>
+            <p className="text-xl opacity-90">
+                The teacher is setting up the next game
+                {[0, 1, 2].map((i) => (
+                    <span key={i} className="sw-dot inline-block">
+                        .
+                    </span>
+                ))}
+            </p>
+            {team ? (
+                <p className="text-xl">
+                    You'll stay on{" "}
+                    <span className="relative inline-block bg-white text-black font-bold px-3 py-1 border-l-8" style={{ borderLeftColor: team.color }}>
+                        <span aria-hidden className="sw-ring absolute inset-0 border-4 border-yellow-300 opacity-0" />
+                        {team.name}
+                    </span>
+                </p>
+            ) : (
+                <p className="text-xl">You'll pick a team when the room opens.</p>
+            )}
+            <HowToPlay />
+        </div>
     );
 }
 
@@ -147,15 +215,24 @@ function TeamPicker({ room, player }: { room: Room; player: Player }) {
     );
 }
 
+// A phone still waiting this long after its own bar ended asks the server directly
+// (the live push can be many seconds late). Options and reveal still come only from the host.
+const STUCK_AFTER_MS = 2000;
+const STUCK_EVERY_MS = 2000;
+
 function AnswerPicker({ room, player }: { room: Room; player: Player }) {
+    const reading = !optionsVisible(room) && !room.revealed;
+    const answering = optionsVisible(room) && !room.revealed;
+    useServerCheck(room.code, reading, room.readSeconds * 1000 + STUCK_AFTER_MS, STUCK_EVERY_MS);
+    useServerCheck(room.code, answering, room.timerSeconds * 1000 + STUCK_AFTER_MS, STUCK_EVERY_MS);
+
     const tile = activeTileOf(room);
     if (!tile || !room.activeTile) return null;
 
     // One answer per team: whoever taps first answers for everyone on it
     const teamAnswer = answerOf(room, player.team);
     const done = room.revealed;
-    // Reading time: question only. The host screen reveals the options for everyone at once.
-    const reading = !optionsVisible(room) && !done;
+    // Reading time (`reading` above): question only. The host screen reveals the options for everyone at once.
     const { answered, total } = answerProgress(room);
     const topic = TOPICS.find((t) => t.id === room.topic)?.name ?? room.topic;
 

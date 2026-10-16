@@ -17,6 +17,8 @@ import { VALUES } from "../../../../src/Jeopardy/questions";
 import { TOPIC_CONTENT } from "../../../../src/Jeopardy/content";
 import { TOPICS } from "../../../../src/Jeopardy/topics";
 import * as rs from "../../../../src/Jeopardy/multiplayer/roomService";
+import { splitClass } from "../../../../src/Jeopardy/multiplayer/teamMath";
+import { startReporting } from "../../../../src/Jeopardy/multiplayer/debugReports";
 
 let failures = 0;
 function check(ok: boolean, label: string) {
@@ -58,6 +60,26 @@ for (const topic of TOPIC_CONTENT) {
     }
 }
 console.log(`Content: ${TOPIC_CONTENT.flatMap((t) => Object.values(t.categories)).flat(2).length} questions checked`);
+
+// Class calculator (setup step 4)
+const split = (n: number, per: number) => {
+    const s = splitClass(n, per);
+    return `${s.teams}x${s.maxTeamSize}${s.tooMany ? "!" : ""}`;
+};
+check(split(23, 3) === "8x3", `23 students, 3 per team -> 8 teams of 3 (${split(23, 3)})`);
+check(split(5, 3) === "2x3", `5 students -> at least 2 teams (${split(5, 3)})`);
+check(split(70, 3) === "10x6!", `70 students -> capped at 10x6 with a warning (${split(70, 3)})`);
+check(split(NaN, 3) === "2x1", `bad input stays valid (${split(NaN, 3)})`);
+
+// Which copy of the room a device keeps (useRoom): newest rev wins, a late push never rewinds
+{
+    const r = (rev?: number) => ({ rev }) as rs.Room;
+    check(rs.acceptCopy(r(3), r(4), "push") && !rs.acceptCopy(r(4), r(3), "push"), "a newer rev replaces an older one, never the reverse");
+    check(!rs.acceptCopy(r(4), r(4), "push"), "the same rev arriving late by push is ignored");
+    check(rs.acceptCopy(r(4), r(5), "check") && rs.acceptCopy(r(4), r(5), "own write"), "own writes and server checks count like the push");
+    check(rs.acceptCopy(r(), r(), "push") && !rs.acceptCopy(r(), r(), "check"), "rooms without rev follow the push, as before");
+    check(rs.acceptCopy(r(4), null, "push") && !rs.acceptCopy(r(4), null, "own write"), "only the push or a check can say the room is gone");
+}
 
 // ----- 2. Seeded collection --------------------------------------------------
 
@@ -257,6 +279,91 @@ try {
 } finally {
     await rs.deleteRoom(code);
     console.log(`Room ${code} deleted`);
+}
+
+// ----- 4. Setup + next game --------------------------------------------------
+// applySettings writes several settings at once and ignores invalid values; newGame takes
+// a finished room back to setup with the same players on the same teams.
+
+const code2 = await rs.createRoom();
+console.log(`Room ${code2} created`);
+try {
+    await rs.applySettings(code2, { topic: "java", readSeconds: 5, timerSeconds: 30, startSeconds: 10, teamCount: 4, maxTeamSize: 2 });
+    let room = await read(code2);
+    check(
+        room.topic === "java" && room.readSeconds === 5 && room.timerSeconds === 30 && room.startSeconds === 10 && room.teams.length === 4 && room.maxTeamSize === 2,
+        "applySettings sets topic, times, team count and max in one write"
+    );
+    await rs.applySettings(code2, { topic: "no-such-topic", timerSeconds: 7, teamCount: 99 });
+    room = await read(code2);
+    check(room.topic === "java" && room.timerSeconds === 30 && room.teams.length === 4, "applySettings ignores unknown topics and values outside the choices");
+
+    await rs.openRoom(code2);
+    const p1 = await rs.joinRoom(code2, "Pia");
+    const p2 = await rs.joinRoom(code2, "Raul");
+    const [t1, t2] = room.teams.map((t) => t.id);
+    await rs.chooseTeam(code2, p1.id, t1);
+    await rs.chooseTeam(code2, p2.id, t2);
+    await rs.newGame(code2);
+    room = await read(code2);
+    check(room.status === "lobby", "newGame is ignored before a game started");
+
+    await rs.startGame(code2);
+    await rs.openTile(code2, 0, 0);
+    room = await read(code2);
+    await rs.showOptions(code2);
+    await rs.answer(code2, p1.id, rs.activeTileOf(room)!.answer);
+    await rs.revealAnswer(code2);
+    await rs.newGame(code2);
+    room = await read(code2);
+    check(room.status === "setup" && room.board.length === 0 && room.activeTile === null, "newGame goes back to setup with no board");
+    check(room.teams.length === 2 && room.teams.every((t) => t.score === 0), "newGame keeps the teams that played, scores reset");
+    check(room.players[p1.id]?.team === t1 && room.players[p2.id]?.team === t2, "newGame keeps the players on their teams");
+    await rs.openRoom(code2);
+    room = await read(code2);
+    check(room.status === "lobby" && rs.startProblem(room) === null, "after newGame the room reopens ready to start");
+
+    // rev: +1 per real write, none for a no-op; own writes reach this tab right away
+    const seen: string[] = [];
+    const stopLocal = rs.subscribeRoomUpdates(code2, (r, source) => seen.push(`${source}:${r?.rev}`));
+    const revBefore = rs.revOf(await read(code2));
+    await rs.setReadSeconds(code2, 15);
+    const revAfter = rs.revOf(await read(code2));
+    await rs.openRoom(code2); // already in the lobby: no change, no write
+    const revNoop = rs.revOf(await read(code2));
+    stopLocal();
+    check(revAfter === revBefore + 1 && revNoop === revAfter, `rev grows by 1 per write and not on a no-op (${revBefore} → ${revAfter} → ${revNoop})`);
+    check(seen[0] === `own write:${revAfter}` && seen[1] === `check:${revAfter}`, `this tab gets its own write at once (${seen.join(", ")})`);
+    const fresh = await rs.fetchRoom(code2);
+    check(fresh?.readSeconds === 15 && rs.revOf(fresh) === revAfter, "fetchRoom sees the latest write");
+
+    // Teacher's debug switch: phones report to rooms/{code}/debug (needs the latest rules)
+    check(room.debug === undefined, "a new room has no debug field (debug off)");
+    try {
+        await rs.setRoomDebug(code2, true);
+        room = await read(code2);
+        check(room.debug === true, "setRoomDebug turns the room's debug switch on");
+        const stop = startReporting(code2, p1.id, () => ({ name: "Pia", team: "test" }), rs.APP_VERSION);
+        await new Promise((r) => setTimeout(r, 1500));
+        stop();
+        const reports = await getDocs(collection(db, "rooms", code2, "debug"));
+        check(reports.size === 1 && reports.docs[0].id === p1.id, "a phone's debug report is written under the room");
+        await rs.startGame(code2);
+        await rs.newGame(code2);
+        room = await read(code2);
+        check(room.debug === true && room.status === "setup", "newGame keeps the debug switch");
+        await rs.setRoomDebug(code2, false);
+        room = await read(code2);
+        const left = await getDocs(collection(db, "rooms", code2, "debug"));
+        check(room.debug === false && left.size === 0, "turning debug off clears the reports");
+    } catch (error) {
+        check(false, `debug switch failed (are the latest Firestore rules deployed?): ${error}`);
+    }
+} catch (error) {
+    check(false, `next-game round crashed: ${error}`);
+} finally {
+    await rs.deleteRoom(code2);
+    console.log(`Room ${code2} deleted`);
 }
 
 console.log(failures === 0 ? "\nAll checks passed" : `\n${failures} check(s) failed`);

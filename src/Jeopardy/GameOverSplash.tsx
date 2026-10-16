@@ -3,8 +3,8 @@ import { useLayoutEffect, useRef } from "react";
 import { MOTION } from "./multiplayer/panelMode";
 
 // Full-screen "Game over!" moment between the last question and the podium,
-// on the big screen and on the phones. Calls onDone when it finishes.
-export default function GameOverSplash({ onDone }: { onDone: () => void }) {
+// on the big screen and on the phones (also "🎮 Next game!" on the host). Calls onDone when it finishes.
+export default function GameOverSplash({ onDone, text = "🏁 Game over!" }: { onDone: () => void; text?: string }) {
     const card = useRef<HTMLDivElement>(null);
     const done = useRef(onDone);
     useLayoutEffect(() => {
@@ -24,7 +24,7 @@ export default function GameOverSplash({ onDone }: { onDone: () => void }) {
     return (
         <div className="fixed inset-0 z-50 bg-[#1c2470] flex items-center justify-center">
             <div ref={card} className="bg-yellow-300 text-black font-bold text-5xl md:text-7xl px-12 py-8 rounded-2xl shadow-2xl opacity-0">
-                🏁 Game over!
+                {text}
             </div>
         </div>
     );

@@ -5,6 +5,7 @@ import { LETTERS } from "../questions";
 import { useFitText } from "../useFitText";
 import { MOTION } from "./panelMode";
 import { useBots } from "./useBots";
+import { useServerCheck } from "./useServerCheck";
 import {
     allTeamsAnswered,
     answerProgress,
@@ -18,8 +19,11 @@ import {
 } from "./roomService";
 
 // Extra time after the host's countdown before closing, so a phone that received the
-// options a moment later still gets its full bar
-const CLOSE_GRACE_MS = 1000;
+// options late (through its 2 s server check when the live push lags) still gets its time
+const CLOSE_GRACE_MS = 3000;
+// While answers come in, the host also reads the room directly every 3 s, so a late push
+// doesn't delay "everyone answered → reveal" or the "N/M answered" counter
+const ANSWERS_CHECK_MS = 3000;
 
 const yellowButton = "bg-yellow-300 text-black font-bold text-2xl px-8 py-3 rounded-lg shadow-lg cursor-pointer hover:bg-yellow-200";
 const outlineButton = "border-4 border-white/60 text-white font-bold text-xl px-5 py-2 rounded-lg cursor-pointer hover:bg-white/10";
@@ -39,6 +43,7 @@ export default function HostQuestionView({ room, code }: { room: Room; code: str
     const { answered, total } = answerProgress(room);
     const winners = room.teams.filter((t) => room.answers.some((a) => a.team === t.id && a.correct));
     useBots(room);
+    useServerCheck(code, !reading && !revealed, ANSWERS_CHECK_MS, ANSWERS_CHECK_MS);
 
     // No need to wait for the timer once every team has answered
     const everyoneAnswered = allTeamsAnswered(room);
