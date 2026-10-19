@@ -24,13 +24,20 @@ type Props = {
 };
 
 const select = "bg-white text-black px-3 py-1 rounded-md";
-const PER_TEAM = [2, 3, 4, 5, 6].map((n) => ({ value: n, label: String(n) }));
+const PER_TEAM_SIZES = [1, 2, 3, 4, 5, 6];
 
 // Step 4: class calculator (students → teams), the manual selects, and the team names
 export default function TeamsStep({ room, students, perTeam, onCalc }: Props) {
     const split = splitClass(students, perTeam);
+    // Fewer students than "per team" makes no sense: those sizes gray out, and lowering
+    // Students drags the selection down with it (setStudents below)
+    const perTeamItems = PER_TEAM_SIZES.map((n) => ({ value: n, label: String(n), disabled: n > students }));
+    const setStudents = (n: number) => onCalc(n, Math.min(perTeam, n));
     const players = Object.values(room.players);
-    const applied = split.teams === room.teams.length && split.maxTeamSize === room.maxTeamSize;
+    const applied =
+        split.teams === room.teams.length &&
+        split.maxTeamSize === room.maxTeamSize &&
+        split.bonusTeams === room.teams.filter((t) => t.bonus).length;
     // Lowering the count unassigns the players of the removed teams (they pick again in the lobby)
     const kept = new Set(room.teams.slice(0, split.teams).map((t) => t.id));
     const displaced = players.filter((p) => p.team !== null && !kept.has(p.team)).length;
@@ -38,7 +45,7 @@ export default function TeamsStep({ room, students, perTeam, onCalc }: Props) {
 
     function apply() {
         if (applyBtn.current) pulse(applyBtn.current);
-        applySettings(room.code, { teamCount: split.teams, maxTeamSize: split.maxTeamSize });
+        applySettings(room.code, { teamCount: split.teams, maxTeamSize: split.maxTeamSize, bonusTeams: split.bonusTeams });
     }
 
     // Teams that exist when the step opens don't pop in; ones added later do
@@ -50,7 +57,7 @@ export default function TeamsStep({ room, students, perTeam, onCalc }: Props) {
                 <label className="flex items-center gap-3 text-2xl font-bold">
                     🧑‍🎓 Students
                     <span className="flex items-center rounded-lg bg-white text-black overflow-hidden">
-                        <button type="button" aria-label="One less" className="px-3 py-1 cursor-pointer hover:bg-yellow-300" onClick={() => onCalc(Math.max(1, students - 1), perTeam)}>
+                        <button type="button" aria-label="One less" className="px-3 py-1 cursor-pointer hover:bg-yellow-300" onClick={() => setStudents(Math.max(1, students - 1))}>
                             −
                         </button>
                         <input
@@ -60,24 +67,32 @@ export default function TeamsStep({ room, students, perTeam, onCalc }: Props) {
                             value={students}
                             onChange={(e) => {
                                 const n = Number(e.target.value);
-                                if (Number.isFinite(n) && n >= 1) onCalc(Math.min(MAX_STUDENTS, Math.round(n)), perTeam);
+                                if (Number.isFinite(n) && n >= 1) setStudents(Math.min(MAX_STUDENTS, Math.round(n)));
                             }}
                             className="w-20 text-center py-1 outline-none"
                         />
-                        <button type="button" aria-label="One more" className="px-3 py-1 cursor-pointer hover:bg-yellow-300" onClick={() => onCalc(Math.min(MAX_STUDENTS, students + 1), perTeam)}>
+                        <button type="button" aria-label="One more" className="px-3 py-1 cursor-pointer hover:bg-yellow-300" onClick={() => setStudents(Math.min(MAX_STUDENTS, students + 1))}>
                             +
                         </button>
                     </span>
                 </label>
                 <div className="flex items-center gap-3 text-2xl font-bold">
                     Per team
-                    <Tabs label="Players per team" items={PER_TEAM} value={perTeam} onChange={(n) => onCalc(students, n)} />
+                    <Tabs label="Players per team" items={perTeamItems} value={perTeam} onChange={(n) => onCalc(students, n)} />
                 </div>
                 <div className="flex items-center gap-4">
                     <p className="text-2xl">
-                        → <CountUp value={split.teams} className="font-bold text-yellow-300" /> teams of up to{" "}
-                        <CountUp value={split.maxTeamSize} className="font-bold text-yellow-300" />{" "}
-                        <span className="text-base opacity-70">({split.places} places)</span>
+                        → <CountUp value={split.teams} className="font-bold text-yellow-300" /> {split.teams === 1 ? "team" : "teams"} of{" "}
+                        <CountUp value={split.maxTeamSize} className="font-bold text-yellow-300" />
+                        {split.bonusTeams > 0 && (
+                            <span>
+                                {" "}
+                                · {split.bonusTeams} of {split.maxTeamSize + 1}
+                            </span>
+                        )}{" "}
+                        <span className="text-base opacity-70">
+                            ({split.places} {split.places === 1 ? "place" : "places"})
+                        </span>
                     </p>
                     <button
                         ref={applyBtn}

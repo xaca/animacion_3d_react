@@ -1,5 +1,7 @@
-// `color` comes from teamNames.ts in multiplayer; local mode has none
-export type Team = { id: string; name: string; score: number; color?: string };
+// `color` comes from teamNames.ts in multiplayer; local mode has none.
+// `bonus`: extra spots the host gave this team on top of the room's max (e.g. 17
+// students in teams of 2 → one team gets +1).
+export type Team = { id: string; name: string; score: number; color?: string; bonus?: number };
 
 // Fixed teams for local mode; in multiplayer the host sets the count and names are random
 export function makeTeams(count: number): Team[] {

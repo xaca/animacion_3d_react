@@ -46,10 +46,20 @@ teams, countdown, podium). Roughly ordered by value for a classroom.
 
 - Nuevo tema "Java a Fondo" (75 preguntas en español: cortocircuito/ternario/rarezas, cadenas, funciones, arreglos, matrices). Tab title "Classroom Jeopardy 🎓" + dynamic per-screen title + 🎓 favicon. 20 topics / 1100 questions.
 
+- Renamed to **Quizzing with Friends** (by Coding with Friends). Spanish team names with classic colors. Min 1 team/1 player; "+1 slot" per team (`bonus`); board size 3×3/4×4/5×5; optional time limit (10/15/20 min, host-screen `GameClock` + `endGame`); mid-game ↩ Restart menu; `npm run pin -- NNNN`; host code-clip bug fixed (shrink-0 + fit); sidebar compact rows keep student names.
+
+- Calculator: "per team" options above the student count gray out and the selection follows when students drop; singular/plural fixed. Phone question view capped at max-w-md with wrapping code lines (no more horizontal cut-off on narrow phones). Tabs control supports disabled items.
+
+- Lobby redesign: one viewport (no scroll), compact one-line team cards, host tools moved into the profile menu. Calculator distributes leftovers automatically as +1 spots (8×2 + one of 3 for 17); manual "+1 slot" buttons removed.
+
+- Lobby head-count legend ("👥 2/17 players · 15 left to join", count-up, "🎉 All 17 in!") plus an ℹ️ note when the split isn't exact (one team of +1).
+- Lobby laid out from the teacher's sketch: brand title top-left, big QR beside a dark join panel, topic as a headline, natural-width team cards, bottom bar (settings pill left, breathing yellow Start right), dotted background. GSAP: staggered entrance, card bounce on joins, flip on 🎲 rename.
+
+- Board sizes 1×1 (una pregunta de 600, relámpago) y 2×2 (200/1000). Nuevo tema "Design Thinking" en español (50 preguntas: proceso, empatizar, entrevistas, mapa de empatía, journey map) — 21 topics / 1150 questions. "🧹 Clean old rooms" + `npm run clean:rooms` + `createdAt`.
+
 ## Known issues
 
-1. **Rooms are never cleaned up** if the host closes the tab instead of clicking "Close room".
-   *Fix idea:* add `createdAt` (+ rules) and a Firestore TTL policy on `rooms` (check Spark availability), or delete old rooms when creating a new one.
+1. ~~Rooms are never cleaned up~~ → manual cleanup shipped ("🧹 Clean old rooms" in Setup + `npm run clean:rooms`), rooms now store `createdAt`. Remaining idea: a Firestore TTL policy on `createdAt` for automatic deletion (console setup, check Spark availability).
 2. **Anyone with the room code can control the room** by calling the Firestore API directly (the host PIN only gates the UI; rules can't tell host writes from player writes).
    *Fix idea:* Firebase anonymous auth; store `hostUid` and check it in the rules for host-only actions.
 3. **Duplicate player names are allowed** in the same room.

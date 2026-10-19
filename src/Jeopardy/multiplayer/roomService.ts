@@ -1,4 +1,4 @@
-import { deleteDoc, doc, getDoc, onSnapshot, runTransaction, setDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, runTransaction, setDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { allUsed, markUsed, type Category } from "../questions";
 import { buildBoardFrom, loadQuestions } from "../questionService";
@@ -40,19 +40,30 @@ export type Room = {
     revealed: boolean; // answer shown to everyone; also locks answers
     answers: Answer[];
     players: Record<string, Player>;
+    boardSize?: number; // 3 | 4 | 5 → N×N board. Missing (old rooms) = 5
+    gameMinutes?: number; // time limit; 0 or missing = no limit
+    gameEndsAt?: number | null; // epoch ms on the host's clock, set by startGame when gameMinutes > 0
+    createdAt?: number; // epoch ms, for the old-rooms cleanup; rooms before the field may lack it
     debug?: boolean; // teacher's debug switch: phones report to the debug console. Missing = off
     rev?: number; // +1 on every write (mutate); devices keep the copy with the highest rev. Missing = 0
 };
 
 export const TIMER_CHOICES = [15, 20, 30];
-export const TEAM_COUNT_CHOICES = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+export const TEAM_COUNT_CHOICES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 export const TEAM_SIZE_CHOICES = [1, 2, 3, 4, 5, 6];
 export const START_SECONDS_CHOICES = [10, 15, 30, 60];
 export const READ_SECONDS_CHOICES = [0, 5, 10, 15];
+export const BOARD_SIZE_CHOICES = [1, 2, 3, 4, 5];
+export const GAME_MINUTES_CHOICES = [0, 10, 15, 20];
 const DEFAULT_TEAM_COUNT = 3;
 const DEFAULT_TEAM_SIZE = 3;
 const DEFAULT_START_SECONDS = 30;
 const DEFAULT_READ_SECONDS = 10;
+
+export const boardSizeOf = (room: Room) => room.boardSize ?? 5;
+export const gameMinutesOf = (room: Room) => room.gameMinutes ?? 0;
+// A team's spots: the room's max plus the host's "+1 slot" for that team
+export const capacityOf = (room: Room, team: Team) => room.maxTeamSize + (team.bonus ?? 0);
 
 // ---------------------------------------------------------------------------
 // Firestore backend: each room is one document, rooms/{code}. Every change runs
@@ -232,6 +243,7 @@ export async function createRoom(): Promise<string> {
     await setDoc(roomRef(code), {
         code,
         version: APP_VERSION,
+        createdAt: Date.now(),
         status: "setup",
         topic: TOPICS[0].id,
         timerSeconds: 20,
@@ -240,6 +252,9 @@ export async function createRoom(): Promise<string> {
         readSeconds: DEFAULT_READ_SECONDS,
         teams: newTeams(DEFAULT_TEAM_COUNT, []),
         startsAt: null,
+        boardSize: 5,
+        gameMinutes: 0,
+        gameEndsAt: null,
         board: [], // built from the topic's questions in startGame
         activeTile: null,
         readEndsAt: null,
@@ -250,6 +265,20 @@ export async function createRoom(): Promise<string> {
         players: {},
     });
     return code;
+}
+
+export type OldRoom = { code: string; createdAt?: number };
+
+// Every room except `keep`: past games left behind when a host closed the tab.
+// Cleaning them never touches the question bank, which is its own collection.
+export async function listOldRooms(keep: string): Promise<OldRoom[]> {
+    const snap = await getDocs(collection(db, "rooms"));
+    return snap.docs.map((d) => ({ code: d.id, createdAt: (d.data() as Room).createdAt })).filter((r) => r.code !== keep);
+}
+
+// Deletes exactly the given rooms (debug reports included via deleteRoom)
+export async function cleanRooms(codes: string[]) {
+    for (const code of codes) await deleteRoom(code);
 }
 
 export async function deleteRoom(code: string) {
@@ -275,9 +304,11 @@ function activeTeams(room: Room): Team[] {
 }
 
 // Why the host can't press Start yet, or null when they can. Shared by UI and startGame.
+// Minimum to play: one team with one player (solo practice is allowed).
 export function startProblem(room: Room): string | null {
-    if (activeTeams(room).length < 2) return "You need at least 2 teams with players";
-    if (room.teams.some((t) => teamSize(room, t.id) > room.maxTeamSize)) return `Teams can have at most ${room.maxTeamSize} players`;
+    if (activeTeams(room).length < 1) return "You need at least 1 team with a player";
+    const over = room.teams.find((t) => teamSize(room, t.id) > capacityOf(room, t));
+    if (over) return `${over.name} has more players than its ${capacityOf(room, over)} spots`;
     return null;
 }
 
@@ -285,7 +316,7 @@ export function startProblem(room: Room): string | null {
 // that still has room. Ignored when every team is full.
 export async function addBot(code: string) {
     await mutate(code, (room) => {
-        const open = room.teams.filter((t) => teamSize(room, t.id) < room.maxTeamSize);
+        const open = room.teams.filter((t) => teamSize(room, t.id) < capacityOf(room, t));
         if (room.status !== "lobby" || open.length === 0) return room;
         const team = open.reduce((a, b) => (teamSize(room, b.id) < teamSize(room, a.id) ? b : a));
         const n = Object.values(room.players).filter((p) => p.bot).length + 1;
@@ -327,6 +358,30 @@ export async function setStartSeconds(code: string, startSeconds: number) {
     await mutate(code, (room) => ({ ...room, startSeconds }));
 }
 
+export async function setBoardSize(code: string, boardSize: number) {
+    await mutate(code, (room) => ({ ...room, boardSize }));
+}
+
+export async function setGameMinutes(code: string, gameMinutes: number) {
+    await mutate(code, (room) => ({ ...room, gameMinutes }));
+}
+
+// "+1 slot" on one team (17 students in teams of 2 → one team of 3). bonus is 0 or 1.
+export async function setTeamBonus(code: string, teamId: string, bonus: number) {
+    await mutate(code, (room) => {
+        if (!beforeGame(room)) return room;
+        return {
+            ...room,
+            teams: room.teams.map((t) => {
+                if (t.id !== teamId) return t;
+                const { bonus: _drop, ...rest } = t;
+                void _drop;
+                return bonus > 0 ? { ...rest, bonus } : rest;
+            }),
+        };
+    });
+}
+
 export async function setReadSeconds(code: string, readSeconds: number) {
     await mutate(code, (room) => ({ ...room, readSeconds }));
 }
@@ -352,7 +407,7 @@ function withTeamCount(room: Room, count: number): Room {
 
 // Before the game only: mid-game the scores and answers refer to the current teams.
 export async function setTeamCount(code: string, count: number) {
-    await mutate(code, (room) => (!beforeGame(room) || count < 2 ? room : withTeamCount(room, count)));
+    await mutate(code, (room) => (!beforeGame(room) || count < 1 ? room : withTeamCount(room, count)));
 }
 
 export type SetupSettings = {
@@ -362,6 +417,9 @@ export type SetupSettings = {
     startSeconds?: number;
     maxTeamSize?: number;
     teamCount?: number;
+    bonusTeams?: number; // how many teams get a +1 spot (class calculator leftovers)
+    boardSize?: number;
+    gameMinutes?: number;
 };
 
 // Several settings in one write (quick start, class calculator). Values outside the
@@ -376,7 +434,20 @@ export async function applySettings(code: string, s: SetupSettings) {
         if (ok(s.timerSeconds, TIMER_CHOICES)) next.timerSeconds = s.timerSeconds;
         if (ok(s.startSeconds, START_SECONDS_CHOICES)) next.startSeconds = s.startSeconds;
         if (ok(s.maxTeamSize, TEAM_SIZE_CHOICES)) next.maxTeamSize = s.maxTeamSize;
+        if (ok(s.boardSize, BOARD_SIZE_CHOICES)) next.boardSize = s.boardSize;
+        if (ok(s.gameMinutes, GAME_MINUTES_CHOICES)) next.gameMinutes = s.gameMinutes;
         if (ok(s.teamCount, TEAM_COUNT_CHOICES)) next = withTeamCount(next, s.teamCount);
+        // The first `bonusTeams` teams get a +1 spot, the rest lose theirs
+        if (s.bonusTeams !== undefined && s.bonusTeams >= 0) {
+            next = {
+                ...next,
+                teams: next.teams.map((t, i) => {
+                    const { bonus: _drop, ...rest } = t;
+                    void _drop;
+                    return i < s.bonusTeams! ? { ...rest, bonus: 1 } : rest;
+                }),
+            };
+        }
         return next;
     });
 }
@@ -411,15 +482,17 @@ export async function startGame(code: string) {
     const before = snap.data() as Room;
     const problem = startProblem(before);
     if (problem) throw new Error(problem);
-    const board = buildBoardFrom(await loadQuestions(before.topic));
+    const board = buildBoardFrom(await loadQuestions(before.topic), boardSizeOf(before));
     await mutate(code, (room) => {
         const teams = activeTeams(room);
+        const minutes = gameMinutesOf(room);
         return {
             ...room,
             status: "board",
             board,
             teams: teams.map((t) => ({ ...t, score: 0 })),
             startsAt: null,
+            gameEndsAt: minutes > 0 ? Date.now() + minutes * 60_000 : null,
             activeTile: null,
             readEndsAt: null,
             optionsAt: null,
@@ -484,10 +557,12 @@ export async function closeTile(code: string) {
     await mutate(code, (room) => {
         if (!room.activeTile) return room;
         const board = markUsed(room.board, room.activeTile.col, room.activeTile.row);
+        const done = allUsed(board);
         return {
             ...room,
             board,
-            status: allUsed(board) ? "end" : "board",
+            status: done ? "end" : "board",
+            ...(done ? { gameEndsAt: null } : {}),
             activeTile: null,
             readEndsAt: null,
             optionsAt: null,
@@ -509,6 +584,7 @@ export async function newGame(code: string) {
             board: [],
             teams: room.teams.map((t) => ({ ...t, score: 0 })),
             startsAt: null,
+            gameEndsAt: null,
             activeTile: null,
             readEndsAt: null,
             optionsAt: null,
@@ -517,7 +593,16 @@ export async function newGame(code: string) {
             answers: [],
         };
         // Everyone left last game (no teams): start again from the default teams
-        return next.teams.length < 2 ? withTeamCount(next, DEFAULT_TEAM_COUNT) : next;
+        return next.teams.length < 1 ? withTeamCount(next, DEFAULT_TEAM_COUNT) : next;
+    });
+}
+
+// Time limit reached (fired by the host screen once the open question, if any, closed):
+// podium with the scores as they are, remaining tiles unplayed.
+export async function endGame(code: string) {
+    await mutate(code, (room) => {
+        if (room.status !== "board") return room;
+        return { ...room, status: "end", gameEndsAt: null, activeTile: null, readEndsAt: null, optionsAt: null, questionEndsAt: null, revealed: false, answers: [] };
     });
 }
 
@@ -526,6 +611,7 @@ export async function backToLobby(code: string) {
         ...room,
         status: "lobby",
         startsAt: null,
+        gameEndsAt: null,
         activeTile: null,
         readEndsAt: null,
         optionsAt: null,
@@ -551,8 +637,9 @@ export async function joinRoom(code: string, name: string): Promise<Player> {
 // Puts the player on a team (leaving their current one). Ignored when the team is gone or full.
 export async function chooseTeam(code: string, playerId: string, teamId: string) {
     await mutate(code, (room) => {
-        if (!room.players[playerId] || !room.teams.some((t) => t.id === teamId)) return room;
-        if (teamSize(room, teamId) >= room.maxTeamSize) return room;
+        const team = room.teams.find((t) => t.id === teamId);
+        if (!room.players[playerId] || !team) return room;
+        if (teamSize(room, teamId) >= capacityOf(room, team)) return room;
         return { ...room, players: { ...room.players, [playerId]: { ...room.players[playerId], team: teamId } } };
     });
 }
@@ -572,6 +659,7 @@ export async function leaveRoom(code: string, playerId: string) {
                 next = {
                     ...next,
                     status: "end",
+                    gameEndsAt: null,
                     activeTile: null,
                     readEndsAt: null,
                     optionsAt: null,

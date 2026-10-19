@@ -11,6 +11,8 @@ export type LastSetup = {
     maxTeamSize: number;
     students: number; // class calculator inputs
     perTeam: number;
+    boardSize?: number; // added later: missing in older saved setups
+    gameMinutes?: number;
 };
 
 const NUMBERS = ["readSeconds", "timerSeconds", "startSeconds", "teamCount", "maxTeamSize", "students", "perTeam"] as const;

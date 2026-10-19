@@ -4,7 +4,7 @@ import { GROUPS, TOPICS } from "../topics";
 import { MOTION } from "./panelMode";
 import { toggleRoomDebug } from "./debugSwitch";
 import ProfileMenu, { type MenuItem } from "./ProfileMenu";
-import { applySettings, openRoom, type Room } from "./roomService";
+import { applySettings, cleanRooms, listOldRooms, openRoom, type Room } from "./roomService";
 import { loadLastSetup, saveLastSetup, type LastSetup } from "./setupPrefs";
 import { pulse, staggerIn } from "./setup/anim";
 import CategoryStep from "./setup/CategoryStep";
@@ -33,7 +33,10 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
     const [visited, setVisited] = useState<Set<number>>(() => new Set([0]));
     const [group, setGroup] = useState(() => TOPICS.find((t) => t.id === room.topic)?.group ?? GROUPS[0].id);
     const [students, setStudents] = useState(() => last?.students ?? room.teams.length * room.maxTeamSize);
-    const [perTeam, setPerTeam] = useState(() => clamp(last?.perTeam ?? room.maxTeamSize, 2, 6));
+    // Never more "per team" than students (the calculator grays those sizes out)
+    const [perTeam, setPerTeam] = useState(() =>
+        Math.min(clamp(last?.perTeam ?? room.maxTeamSize, 1, 6), last?.students ?? room.teams.length * room.maxTeamSize)
+    );
     const [busy, setBusy] = useState(false);
     const busyRef = useRef(false);
 
@@ -71,6 +74,8 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
                 startSeconds: room.startSeconds,
                 teamCount: room.teams.length,
                 maxTeamSize: room.maxTeamSize,
+                boardSize: room.boardSize ?? 5,
+                gameMinutes: room.gameMinutes ?? 0,
                 students,
                 perTeam,
             });
@@ -82,6 +87,8 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
         readSeconds: s.readSeconds,
         timerSeconds: s.timerSeconds,
         startSeconds: s.startSeconds,
+        boardSize: s.boardSize,
+        gameMinutes: s.gameMinutes,
         ...(players.length > 0 ? {} : { teamCount: s.teamCount, maxTeamSize: s.maxTeamSize }),
     });
     const quickOpen = (s: LastSetup) =>
@@ -94,7 +101,7 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
         run(async () => {
             await applySettings(room.code, quickSettings(s));
             setStudents(s.students);
-            setPerTeam(clamp(s.perTeam, 2, 6));
+            setPerTeam(Math.min(clamp(s.perTeam, 1, 6), s.students));
             goTo(1);
         });
 
@@ -103,9 +110,27 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
         setPerTeam(per);
     }
 
+    // Housekeeping: deletes every room except this one (the question bank is untouched)
+    async function cleanOldRooms() {
+        try {
+            const olds = await listOldRooms(room.code);
+            if (olds.length === 0) return alert("No old rooms to clean ✨");
+            const dated = olds.map((r) => r.createdAt).filter((t): t is number => typeof t === "number");
+            const days = dated.length > 0 ? Math.max(1, Math.round((Date.now() - Math.min(...dated)) / 86_400_000)) : null;
+            const label = `${olds.length} old room${olds.length === 1 ? "" : "s"}${days !== null ? ` (oldest ≈ ${days} day${days === 1 ? "" : "s"})` : ""}`;
+            if (!confirm(`Delete ${label}? This room is kept; the questions are never touched.`)) return;
+            await cleanRooms(olds.map((r) => r.code));
+            alert(`Deleted ${label}.`);
+        } catch (e) {
+            console.error("Could not clean old rooms", e);
+            alert("Could not clean the old rooms. Check your connection and try again.");
+        }
+    }
+
     const confirmDrop = () => players.length === 0 || confirm(`${players.length} players will be disconnected. Continue?`);
     const menu: MenuItem[] = [
         { label: "🐞 Debug mode", on: room.debug === true, onClick: () => toggleRoomDebug(room.code, room.debug !== true) },
+        { label: "🧹 Clean old rooms", onClick: () => void cleanOldRooms() },
         ...(players.length > 0 ? [{ label: "✨ Start over in a new room", onClick: () => confirmDrop() && onNewRoom() }] : []),
         { label: "Cancel room", onClick: () => confirmDrop() && onExit(), danger: true, separatorBefore: true },
         { label: "Log out", onClick: onLogout, separatorBefore: true },
@@ -149,6 +174,9 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
                     <div className="flex flex-wrap items-center justify-center gap-2 text-lg">
                         <Summary text={topic?.name ?? room.topic} strong />
                         <Summary text={`read ${room.readSeconds} s · answer ${room.timerSeconds} s`} />
+                        <Summary
+                            text={`${room.boardSize ?? 5}×${room.boardSize ?? 5}${(room.gameMinutes ?? 0) > 0 ? ` · ${room.gameMinutes} min` : ""}`}
+                        />
                         <Summary text={`${room.teams.length} teams × ${room.maxTeamSize}`} />
                         {step < STEPS.length - 1 && (
                             <button

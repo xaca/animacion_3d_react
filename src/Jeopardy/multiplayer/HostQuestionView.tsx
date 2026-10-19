@@ -81,7 +81,8 @@ export default function HostQuestionView({ room, code }: { room: Room; code: str
         return () => removeEventListener("keydown", onKey);
     }, []);
 
-    const fitRef = useFitText<HTMLDivElement>(60, 20, [tile.question, tile.code]);
+    // `reading` is a dependency: the question area is taller during the reading time
+    const fitRef = useFitText<HTMLDivElement>(60, 20, [tile.question, tile.code, reading]);
 
     // Options slide in together when they appear (with reading time 0: on mount)
     const optionsBox = useRef<HTMLDivElement>(null);
@@ -138,14 +139,22 @@ export default function HostQuestionView({ room, code }: { room: Room; code: str
                 </div>
             </header>
 
-            {/* Children use em sizes, so useFitText scales question and code together */}
-            <div ref={fitRef} className="flex-[2] min-h-0 overflow-hidden flex flex-col items-center justify-center text-center gap-[0.4em] px-4">
-                <p className="font-bold leading-tight max-w-full">{tile.question}</p>
-                {tile.code && <pre className="bg-black/40 rounded-lg text-left text-[0.45em] leading-snug px-6 py-3 max-w-full overflow-hidden">{tile.code}</pre>}
+            {/* Children use em sizes, so useFitText scales question and code together. They are
+                shrink-0: if flex squeezed them, the code would clip internally and the fit hook
+                would never see the overflow (code snippets showed only their first line). During
+                the reading time the question takes most of the height; the placeholder needs none. */}
+            <div
+                ref={fitRef}
+                className={`${reading ? "flex-[5]" : "flex-[2]"} min-h-0 overflow-hidden flex flex-col items-center justify-center text-center gap-[0.4em] px-4`}
+            >
+                <p className="shrink-0 font-bold leading-tight max-w-full">{tile.question}</p>
+                {tile.code && (
+                    <pre className="shrink-0 bg-black/40 rounded-lg text-left text-[0.45em] leading-snug px-6 py-3 max-w-full overflow-hidden">{tile.code}</pre>
+                )}
             </div>
 
             {reading ? (
-                <div className="flex-[3] min-h-0 flex items-center justify-center">
+                <div className="flex-[1] min-h-0 flex items-center justify-center">
                     <p className="text-2xl opacity-70">Read the question… the options are coming.</p>
                 </div>
             ) : (

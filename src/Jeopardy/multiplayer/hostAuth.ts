@@ -1,8 +1,7 @@
 // Host PIN gate. A deterrent for the classroom, not real security: the check runs
 // in the browser and Firestore rules can't tell host writes from player writes.
-// To change the PIN, store the SHA-256 hex of the new one here:
-//   node -e "console.log(require('crypto').createHash('sha256').update('NEWPIN').digest('hex'))"
-const PIN_HASH = "8c6c42f379f08f03b79653a3230abd5e8079999435030fd8ca703ae35fe9b37a";
+// To change the PIN:  npm run pin -- 2468   (rewrites the hash below), then npm run deploy.
+const PIN_HASH = "33c604aed594a9618f582adf5c78809254b81770ae3638d628e3c3b5012c357a";
 const KEY = "jeopardy-host";
 
 export function isHostUnlocked(): boolean {

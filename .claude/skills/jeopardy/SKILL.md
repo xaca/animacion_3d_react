@@ -1,9 +1,9 @@
 ---
 name: jeopardy
-description: Everything about the "Do you know your English?" Jeopardy game in src/Jeopardy — architecture, Firestore data model (rooms + questions), game rules, how to add questions and topics, seed, test, and deploy to Firebase. Use whenever working on the Jeopardy game, its questions, its multiplayer/Firebase code, or its deployment.
+description: Everything about the "Quizzing with Friends" quiz game (Jeopardy-style) in src/Jeopardy — architecture, Firestore data model (rooms + questions), game rules, how to add questions and topics, seed, test, and deploy to Firebase. Use whenever working on the Jeopardy game, its questions, its multiplayer/Firebase code, or its deployment.
 ---
 
-# Jeopardy game ("Do you know your English?")
+# Quizzing with Friends (Jeopardy-style game, by the Coding with Friends community)
 
 A classroom quiz game. The host shows the board on a big screen; players answer
 multiple-choice questions on their phones. 20 topics / 1100 questions, organized in groups
@@ -40,7 +40,7 @@ Routing is hand-written in `src/Jeopardy/Jeopardy.tsx` (no router library): `vie
 | `topics.ts` | `GROUPS` (tab row) and `TOPICS`: id/name/tagline/group cards for Setup (ids must match `content/`) |
 | `content/` | Source of all questions (`java.ts`, `javaDepth.ts` — Spanish —, `csharp.ts`, `javascript.ts`, `htmlCss.ts`, `oop.ts`, `ai.ts`, `uxUi.ts`, `graphicDesign.ts`, `popCulture.ts`, `englishA1.ts`, `englishB1.ts`, `technology.ts`, `videoGames.ts`, `books.ts`, `rap.ts`, `reggaeton.ts`, `pop.ts`, `rock.ts`, `sports.ts`, `index.ts`, `types.ts`). Uploaded by the seed script; **never imported by the app** so answers stay out of the bundle |
 | `teams.ts` | `Team` type (`id`, `name`, `score`, `color?`), `makeTeams(n)` (local mode only), `rankTeams` (competition ranking for the podium) |
-| `teamNames.ts` | `TEAM_NAMES` pool (16 color + animal names, e.g. "Red Fox", each with a hex color) and `pickTeamNames(n, taken)` |
+| `teamNames.ts` | `TEAM_NAMES` pool (13 Spanish animal + classic-color names, e.g. "Zorro Rojo"; no cyan/magenta per the user) and `pickTeamNames(n, taken)` |
 | `Board.tsx` | Category × value grid |
 | `QuestionModal.tsx` | **Local mode only** now: question + options + reveal (multiplayer host uses `HostQuestionView`) |
 | `useFitText.ts` | `useFitText(max, min, deps)`: shrinks the font until the content fits its box (bounded flex/grid child + overflow-hidden); reruns on resize |
@@ -88,7 +88,10 @@ Room = {
   readSeconds: number,           // 0 | 5 | 10 | 15 (READ_SECONDS_CHOICES), default 10: question alone before the options
   maxTeamSize: number,           // 1..6 (TEAM_SIZE_CHOICES), default 3
   startSeconds: number,          // 10 | 15 | 30 | 60 (START_SECONDS_CHOICES), default 30: last call after Start
-  teams: { id, name, score, color }[], // 2..10 (TEAM_COUNT_CHOICES), random names from teamNames.ts; 3 in a fresh room
+  teams: { id, name, score, color, bonus? }[], // 1..10 (TEAM_COUNT_CHOICES); bonus = host's "+1 slot" → capacityOf(room, team) = maxTeamSize + bonus
+  boardSize?: number,            // 3 | 4 | 5 → N×N board (BOARD_SIZE_CHOICES); missing/old rooms = 5. Short boards spread levels (3×3 → 1/3/5)
+  gameMinutes?: number,          // 0/10/15/20 (GAME_MINUTES_CHOICES); 0 or missing = no limit
+  gameEndsAt?: number | null,    // set by startGame when gameMinutes > 0; the HOST screen calls endGame() when it passes (only from the board, so an open question finishes)
   startsAt: number | null,       // epoch ms; start countdown running when set (lobby only)
   board: { name, tiles: { question, code?, answer, options[4], value, used }[] }[], // [] until startGame
   activeTile: { col, row } | null,
@@ -120,7 +123,13 @@ Every room write goes through `mutate(code, room => newRoom)`, which runs a **Fi
 - Host game screen is one viewport (`h-dvh`), **nothing scrolls**: sidebar (compact rows from 6 teams, no list scrollbar) + board whose rows stretch + `HostQuestionView` with auto-fitting text. Phones show a single "Your team: 800 · 2nd of 3" line instead of all teams' scores.
 - **Last question**: ⭐ badge on host and phones while it's open; after its reveal the main button reads "🏆 See final results". Closing it → `GameOverSplash` on every screen, then podium (animated rise + confetti); phones add "Your team finished 2nd of 3!".
 - Topic name is shown in the host board header and in the phones' question header. Programming topics use language-prefixed category names (Java…, C#…, JS…) so boards can't be confused.
-- The app's UI is in English; question content may be in Spanish per topic ("Java a Fondo" is). Browser-tab title: "Classroom Jeopardy 🎓" (index.html) plus a per-view `document.title` in Jeopardy.tsx ("Sala ABCD · …" on host/player); favicon is an inline-SVG 🎓.
+- The app's UI is in English; question content may be in Spanish per topic ("Java a Fondo" is) and team names are Spanish. Brand: **Quizzing with Friends** (home h1 + "by Coding with Friends", index.html title, per-view `document.title` "Sala ABCD · …"); favicon is an inline-SVG 🎓. "Jeopardy" stays only in code/file/localStorage names.
+- **Minimum to play is 1 team with 1 player** (`startProblem`); team count choices start at 1. The lobby warns when players > total spots.
+- **Uneven teams are automatic**: the class calculator keeps the chosen size as the max and spreads leftovers as `+1` spots (`splitClass` → `bonusTeams`; 17 of 2 → 8×2 with one team of 3), applied by `applySettings({ bonusTeams })` to the first N teams and stored as `team.bonus`, checked everywhere via `capacityOf`. No manual slot buttons in the lobby.
+- **Waiting room is one viewport, no scrolling**: compact team cards (`TeamCard`, name auto-fits to one line via `useFitText`, members as a wrapped comma list); all host tools (Settings, 🎲 names, 🧪 test players, 🐞 debug, Close, Log out) live in the ProfileMenu, nothing inline.
+- **Mid-game menu** (top-right of board/question): ↩ Restart game (confirm → `backToLobby`: same code, players keep teams, board/scores discarded), debug switch, Close room. A time-limited game shows a ⏳ mm:ss `GameClock`.
+- **Host PIN**: change it with `npm run pin -- 2468` (rewrites the hash in hostAuth.ts) then `npm run deploy`.
+- **Old-rooms cleanup**: Setup menu → "🧹 Clean old rooms" deletes every room but the current one (confirm shows count + oldest age); terminal twin `npm run clean:rooms [-- --keep ABCD]`. Rooms store `createdAt` (optional in old ones); the `questions` collection is never touched. Backed by `listOldRooms`/`cleanRooms`.
 - Players can join mid-game and pick any team that isn't full; the team count and names can only change before the game (setup or lobby). Teams never vanish on their own (only empty ones at start).
 - A player's "Leave game" (and the closed-room / kicked messages) goes back to **the join form with the code prefilled**, not home.
 - Mid-game, a team whose **last member leaves** vanishes (score included, inside `leaveRoom`'s transaction); when **no team has players left** the room goes to `end` and the end screens show "Everyone left the game" instead of a winner. Only the explicit Leave button triggers this — a closed browser never says goodbye (presence detection is a backlog idea).

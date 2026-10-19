@@ -75,7 +75,7 @@ function Screens(): ReactNode {
 
     // The tab's title says where you are, handy with several test tabs open
     useEffect(() => {
-        const base = "Classroom Jeopardy 🎓";
+        const base = "Quizzing with Friends 🎓";
         document.title = view.kind === "host" || view.kind === "player" ? `Sala ${view.code} · ${base}` : base;
     }, [view]);
 

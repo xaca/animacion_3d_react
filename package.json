@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "deploy": "npm run build && firebase deploy --only hosting",
+    "pin": "node scripts/set-pin.mjs",
+    "clean:rooms": "esbuild scripts/clean-rooms.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.cache/jeopardy-clean.mjs --log-level=warning && node node_modules/.cache/jeopardy-clean.mjs",
     "deploy:all": "npm run build && firebase deploy",
     "seed": "esbuild scripts/seed-questions.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.cache/jeopardy-seed.mjs --log-level=warning && node node_modules/.cache/jeopardy-seed.mjs",
     "test:jeopardy": "esbuild .claude/skills/jeopardy/scripts/round-test.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.cache/jeopardy-round-test.mjs --log-level=warning && node node_modules/.cache/jeopardy-round-test.mjs"

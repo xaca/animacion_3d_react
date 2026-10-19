@@ -15,6 +15,7 @@ import { collection, doc, getDoc, getDocs, query, where } from "firebase/firesto
 import { db } from "../../../../src/lib/firebase";
 import { VALUES } from "../../../../src/Jeopardy/questions";
 import { TOPIC_CONTENT } from "../../../../src/Jeopardy/content";
+import { buildBoardFrom } from "../../../../src/Jeopardy/questionService";
 import { TOPICS } from "../../../../src/Jeopardy/topics";
 import * as rs from "../../../../src/Jeopardy/multiplayer/roomService";
 import { splitClass } from "../../../../src/Jeopardy/multiplayer/teamMath";
@@ -61,15 +62,35 @@ for (const topic of TOPIC_CONTENT) {
 }
 console.log(`Content: ${TOPIC_CONTENT.flatMap((t) => Object.values(t.categories)).flat(2).length} questions checked`);
 
+// Short boards keep the difficulty spread (pure check on buildBoardFrom)
+{
+    const docs = Object.entries(TOPIC_CONTENT[0].categories).flatMap(([category, levels]) =>
+        levels.flatMap((qs, i) => qs.map((q) => ({ topic: "t", category, level: i + 1, question: q.question, answer: q.answer, wrong: q.wrong })))
+    );
+    const b3 = buildBoardFrom(docs, 3);
+    check(
+        b3.length === 3 && b3.every((c) => c.tiles.length === 3) && b3[0].tiles.map((t) => t.value).join(",") === "200,600,1000",
+        "3×3 board: 3 categories × levels 1/3/5 (200, 600, 1000)"
+    );
+    const b4 = buildBoardFrom(docs, 4);
+    check(b4.length === 4 && b4[0].tiles.map((t) => t.value).join(",") === "200,400,800,1000", "4×4 board: values 200/400/800/1000");
+    const b2 = buildBoardFrom(docs, 2);
+    check(b2.length === 2 && b2[0].tiles.map((t) => t.value).join(",") === "200,1000", "2×2 board: one easy, one decider (200, 1000)");
+    const b1 = buildBoardFrom(docs, 1);
+    check(b1.length === 1 && b1[0].tiles.length === 1 && b1[0].tiles[0].value === 600, "1×1 board: a single 600 question");
+}
+
 // Class calculator (setup step 4)
 const split = (n: number, per: number) => {
     const s = splitClass(n, per);
-    return `${s.teams}x${s.maxTeamSize}${s.tooMany ? "!" : ""}`;
+    return `${s.teams}x${s.maxTeamSize}${s.bonusTeams > 0 ? `+${s.bonusTeams}` : ""}${s.tooMany ? "!" : ""}`;
 };
-check(split(23, 3) === "8x3", `23 students, 3 per team -> 8 teams of 3 (${split(23, 3)})`);
-check(split(5, 3) === "2x3", `5 students -> at least 2 teams (${split(5, 3)})`);
-check(split(70, 3) === "10x6!", `70 students -> capped at 10x6 with a warning (${split(70, 3)})`);
-check(split(NaN, 3) === "2x1", `bad input stays valid (${split(NaN, 3)})`);
+check(split(17, 2) === "8x2+1", `17 students, 2 per team -> 8 teams of 2, one gets a +1 spot (${split(17, 2)})`);
+check(split(23, 3) === "7x3+2", `23 students, 3 per team -> 7 teams of 3, two get +1 (${split(23, 3)})`);
+check(split(5, 3) === "2x3", `5 students -> 2 teams of 3 with an empty spot, never a team of 5 (${split(5, 3)})`);
+check(split(70, 3) === "10x6+10", `70 students -> capped at 10 teams, size grows to fit exactly (${split(70, 3)})`);
+check(split(100, 2) === "10x6+10!", `100 students -> maxed out with a warning (${split(100, 2)})`);
+check(split(NaN, 3) === "1x3", `bad input stays valid (${split(NaN, 3)})`);
 
 // Which copy of the room a device keeps (useRoom): newest rev wins, a late push never rewinds
 {
@@ -103,6 +124,7 @@ try {
     check(room.status === "setup", "fresh room starts in setup");
     check(room.version === rs.APP_VERSION, `room stores the build version (${room.version})`);
     check(room.teams.length === 3 && room.maxTeamSize === 3 && room.startSeconds === 30, "fresh room has 3 teams, max 3 per team, 30 s start countdown");
+    check(rs.boardSizeOf(room) === 5 && rs.gameMinutesOf(room) === 0, "fresh room: 5×5 board, no time limit");
     await rs.setStartSeconds(code, 10);
     const rejected = await rs.joinRoom(code, "Zed").then(
         () => false,
@@ -120,6 +142,16 @@ try {
     await rs.setTeamCount(code, 4);
     room = await read(code);
     check(room.teams.length === 4 && unique(names(room)), "team count raised to 4 with unique names");
+    // The class calculator applies leftovers as +1 spots on the first teams
+    await rs.applySettings(code, { bonusTeams: 2 });
+    room = await read(code);
+    check(
+        room.teams.filter((t) => t.bonus === 1).length === 2 && room.teams[0].bonus === 1 && room.teams[3].bonus === undefined,
+        "applySettings gives the first N teams a +1 spot"
+    );
+    await rs.applySettings(code, { bonusTeams: 0 });
+    room = await read(code);
+    check(room.teams.every((t) => t.bonus === undefined), "bonusTeams 0 clears every +1 spot");
     const [alpha, beta, gamma, delta] = room.teams.map((t) => t.id);
     await rs.openRoom(code);
     room = await read(code);
@@ -139,6 +171,20 @@ try {
     room = await read(code);
     check(room.players[fay.id].team === null, "a full team cannot be joined");
     check(rs.startProblem(room) === null, "Start is available with 2+ teams with players");
+    check(rs.startProblem({ ...room, teams: room.teams.filter((t) => t.id === beta) }) === null, "one team with one player can start (min 1)");
+
+    // "+1 slot": one team may hold an extra player; removing the slot blocks Start again
+    await rs.setTeamBonus(code, alpha, 1);
+    await rs.chooseTeam(code, fay.id, alpha);
+    room = await read(code);
+    check(room.players[fay.id].team === alpha, "a +1 slot lets a 4th player join a team of max 3");
+    await rs.setTeamBonus(code, alpha, 0);
+    room = await read(code);
+    check(rs.startProblem(room) !== null, "removing the slot blocks Start while the team is over its spots");
+    await rs.setTeamBonus(code, alpha, 1);
+    room = await read(code);
+    check(rs.startProblem(room) === null && room.teams.find((t) => t.id === alpha)?.bonus === 1, "the slot restores Start");
+    // Fay stays on alpha (4/3+1) so delta is still the emptiest team for the bot check below
 
     // Test players: a bot joins the emptiest team (delta, 0 players); removeBots removes only bots
     await rs.addBot(code);
@@ -176,10 +222,12 @@ try {
     room = await read(code);
     check(room.startsAt === null, "the host can cancel the countdown");
     await rs.startCountdown(code);
+    await rs.setGameMinutes(code, 10);
     await rs.startGame(code);
 
     room = await read(code);
     check(room.status === "board" && room.startsAt === null, "game started and the countdown cleared");
+    check(room.gameEndsAt != null && room.gameEndsAt > Date.now() + 9 * 60_000, "a 10 min limit sets the game's end time");
     check(room.teams.length === 3 && !room.teams.some((t) => t.id === delta2), "the empty team was eliminated");
     check(room.players[fay.id].team === null, "a player without a team stays in the room");
     await rs.chooseTeam(code, fay.id, gamma);
@@ -274,6 +322,16 @@ try {
         room.status === "end" && room.teams.length === 0 && room.players[zoe.id] !== undefined,
         "all teams gone -> game over (a teamless player doesn't keep it alive)"
     );
+
+    // Old-rooms cleanup: lists strays (never the kept room), deletes only the given codes
+    const code2 = await rs.createRoom();
+    const olds = await rs.listOldRooms(code);
+    const stray = olds.find((r) => r.code === code2);
+    check(stray !== undefined && olds.every((r) => r.code !== code), "listOldRooms sees the stray room and skips the current one");
+    check(typeof stray?.createdAt === "number" && stray.createdAt > Date.now() - 60_000, "new rooms store createdAt");
+    await rs.cleanRooms([code2]);
+    room = await read(code);
+    check(room.status === "end" && (await rs.listOldRooms(code)).every((r) => r.code !== code2), "cleanRooms deletes only the listed rooms");
 } catch (error) {
     check(false, `round crashed: ${error}`);
 } finally {

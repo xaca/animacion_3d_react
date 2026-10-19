@@ -9,7 +9,8 @@ type Props = {
 export default function HomeScreen({ onHost, onJoin }: Props) {
     return (
         <Screen>
-            <h1 className="text-4xl md:text-6xl font-bold">Do you know your English?</h1>
+            <h1 className="text-4xl md:text-6xl font-bold">Quizzing with Friends</h1>
+            <p className="text-xl opacity-80 -mt-3">by Coding with Friends</p>
             <div className="flex flex-col gap-4 w-full max-w-sm">
                 <button className={primaryButton} onClick={onHost}>
                     Host a game

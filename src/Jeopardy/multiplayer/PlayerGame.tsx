@@ -176,8 +176,9 @@ function TeamPicker({ room, player }: { room: Room; player: Player }) {
             <div className="grid gap-3 w-full max-w-md">
                 {room.teams.map((team) => {
                     const size = sizeOf(team.id);
+                    const cap = room.maxTeamSize + (team.bonus ?? 0);
                     const mine = player.team === team.id;
-                    const full = size >= room.maxTeamSize && !mine;
+                    const full = size >= cap && !mine;
                     return (
                         <button
                             key={team.id}
@@ -193,7 +194,7 @@ function TeamPicker({ room, player }: { room: Room; player: Player }) {
                         >
                             {team.name}{" "}
                             <span className="text-base font-normal opacity-70">
-                                ({size}/{room.maxTeamSize}{full ? ", full" : ""})
+                                ({size}/{cap}{full ? ", full" : ""})
                             </span>
                         </button>
                     );
@@ -238,7 +239,9 @@ function AnswerPicker({ room, player }: { room: Room; player: Player }) {
 
     return (
         <>
-            <div>
+            {/* Same width cap as the option buttons, so nothing can grow past a phone's screen.
+                Long code lines wrap (pre-wrap + break) instead of cutting off at the edges. */}
+            <div className="w-full max-w-md">
                 <p className="text-lg opacity-80">
                     {topic} — {room.board[room.activeTile.col].name} — {tile.value}
                     {isLastTile(room) && (
@@ -246,7 +249,11 @@ function AnswerPicker({ room, player }: { room: Room; player: Player }) {
                     )}
                 </p>
                 <p className="text-2xl font-bold">{tile.question}</p>
-                {tile.code && <pre className="bg-black/40 text-left text-base px-3 py-2 mt-2 overflow-x-auto">{tile.code}</pre>}
+                {tile.code && (
+                    <pre className="bg-black/40 rounded-lg text-left text-sm sm:text-base px-3 py-2 mt-2 max-w-full whitespace-pre-wrap break-words">
+                        {tile.code}
+                    </pre>
+                )}
             </div>
 
             {/* Bars start when this phone receives the update, so a wrong clock can't shorten them */}

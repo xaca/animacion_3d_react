@@ -277,7 +277,10 @@ function TeamRow({ rowRef, team, place, variant, compact, members, mark, scored,
                 <span className="block font-bold truncate" title={team.name}>
                     {team.name}
                 </span>
-                {!compact && members.length > 0 && <span className="block text-xs opacity-60 truncate">{members.join(", ")}</span>}
+                {/* Student names stay visible even in compact rows (the teacher asked for them) */}
+                {members.length > 0 && (
+                    <span className={`block opacity-60 truncate ${compact ? "text-[10px] leading-tight" : "text-xs"}`}>{members.join(", ")}</span>
+                )}
             </span>
             <span className="flex flex-col items-end">
                 <span ref={scoreEl} className={`font-bold tabular-nums ${compact ? "text-lg" : "text-2xl"} ${scored ? "text-yellow-300" : ""}`} />

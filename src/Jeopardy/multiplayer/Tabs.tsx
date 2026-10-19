@@ -2,7 +2,7 @@ import gsap from "gsap";
 import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { MOTION } from "./panelMode";
 
-export type TabItem<T> = { value: T; label: ReactNode; done?: boolean };
+export type TabItem<T> = { value: T; label: ReactNode; done?: boolean; disabled?: boolean };
 
 type Props<T> = {
     items: TabItem<T>[];
@@ -43,7 +43,11 @@ export default function Tabs<T extends string | number>({ items, value, onChange
         const next = { ArrowRight: active + 1, ArrowLeft: active - 1, Home: 0, End: last }[e.key];
         if (next === undefined) return;
         e.preventDefault();
-        const i = (next + items.length) % items.length;
+        // Walk in the pressed direction until an enabled tab is found
+        const dir = next >= active ? 1 : -1;
+        let i = (next + items.length) % items.length;
+        for (let hops = 0; items[i].disabled && hops < items.length; hops++) i = (i + dir + items.length) % items.length;
+        if (items[i].disabled) return;
         onChange(items[i].value);
         (list.current?.children[i + 1] as HTMLElement | undefined)?.focus();
     }
@@ -67,11 +71,18 @@ export default function Tabs<T extends string | number>({ items, value, onChange
                         id={idBase ? `${idBase}-tab-${i}` : undefined}
                         aria-controls={idBase ? `${idBase}-panel` : undefined}
                         aria-selected={selected}
+                        disabled={item.disabled}
                         tabIndex={selected ? 0 : -1}
                         onClick={() => onChange(item.value)}
-                        className={`relative z-10 flex items-center gap-2 rounded-lg font-bold cursor-pointer transition-colors ${
+                        className={`relative z-10 flex items-center gap-2 rounded-lg font-bold transition-colors ${
                             big ? "px-5 py-2 text-xl" : "px-4 py-1.5 text-lg"
-                        } ${selected ? "text-[#2a3698]" : "text-white/80 hover:text-white hover:bg-white/10"}`}
+                        } ${
+                            selected
+                                ? "text-[#2a3698] cursor-pointer"
+                                : item.disabled
+                                  ? "text-white/25 cursor-not-allowed"
+                                  : "text-white/80 cursor-pointer hover:text-white hover:bg-white/10"
+                        }`}
                     >
                         {item.done !== undefined && <StepMark n={i + 1} done={item.done} selected={selected} />}
                         {item.label}

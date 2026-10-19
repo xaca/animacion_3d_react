@@ -7,9 +7,11 @@ import { TOPICS } from "../topics";
 import HostLobby from "./HostLobby";
 import HostQuestionView from "./HostQuestionView";
 import HostSetup from "./HostSetup";
+import ProfileMenu, { type MenuItem } from "./ProfileMenu";
 import ScorePanel from "./ScorePanel";
+import { toggleRoomDebug } from "./debugSwitch";
 import { MOTION, usePanelMode } from "./panelMode";
-import { applySettings, createRoom, deleteRoom, newGame, openTile, type Room } from "./roomService";
+import { applySettings, backToLobby, createRoom, deleteRoom, endGame, newGame, openTile, type Room } from "./roomService";
 import { Message } from "./ui";
 import { useRoom } from "./useRoom";
 
@@ -39,6 +41,19 @@ export default function HostGame({ code, onExit, onLogout, onNewRoom }: Props) {
 
     // "🎮 Next game!" splash while the room goes back to setup
     const [nextSplash, setNextSplash] = useState(false);
+
+    // Time-limited game: when the limit passes, end it. Checked only on the board, so an
+    // open question always finishes; "Next question" then lands on the podium.
+    const boardExpiry = room && room.status === "board" ? room.gameEndsAt : null;
+    useEffect(() => {
+        if (boardExpiry == null) return;
+        const check = () => {
+            if (Date.now() >= boardExpiry) endGame(code);
+        };
+        check();
+        const id = setInterval(check, 1000);
+        return () => clearInterval(id);
+    }, [boardExpiry, code]);
 
     // Every screen goes through this, so the tree shape is the same with debug on or off
     // (turning debug on never remounts the game)
@@ -117,6 +132,24 @@ export default function HostGame({ code, onExit, onLogout, onNewRoom }: Props) {
     const activeTile = active ? room.board[active.col].tiles[active.row] : null;
     const topic = TOPICS.find((t) => t.id === room.topic)?.name ?? room.topic;
 
+    const humans = Object.values(room.players).filter((p) => !p.bot).length;
+    const gameMenu: MenuItem[] = [
+        { label: "🐞 Debug mode", on: room.debug === true, onClick: () => toggleRoomDebug(code, room.debug !== true) },
+        {
+            label: "↩ Restart game",
+            separatorBefore: true,
+            onClick: () =>
+                confirm("Restart? This board and its scores are discarded; everyone goes back to the waiting room with their teams.") &&
+                backToLobby(code),
+        },
+        {
+            label: "Close room",
+            danger: true,
+            separatorBefore: true,
+            onClick: () => (humans === 0 || confirm(`${humans} players will be disconnected. Continue?`)) && closeRoom(),
+        },
+    ];
+
     // Whole screen, no page scroll: score sidebar on the left, board (or question) in an
     // inset panel filling the rest
     return withDebug(
@@ -125,12 +158,16 @@ export default function HostGame({ code, onExit, onLogout, onNewRoom }: Props) {
             <main className="flex-1 min-w-0 min-h-0 p-2">
                 <div className="relative h-full flex flex-col rounded-xl bg-[#2a3698] shadow-2xl p-2 overflow-hidden">
                     {/* The sidebar header shows topic + room when expanded; otherwise this corner label does */}
-                    {panelMode !== "expanded" && (
-                        <p className="absolute top-1 right-3 z-10 text-sm opacity-80">
-                            <b className="mr-2">{topic} ·</b>
-                            Room <b className="tracking-widest">{room.code}</b>
-                        </p>
-                    )}
+                    <div className="absolute top-1 right-1 z-20 flex items-center gap-3">
+                        {room.gameEndsAt != null && <GameClock endsAt={room.gameEndsAt} />}
+                        {panelMode !== "expanded" && (
+                            <p className="text-sm opacity-80">
+                                <b className="mr-2">{topic} ·</b>
+                                Room <b className="tracking-widest">{room.code}</b>
+                            </p>
+                        )}
+                        <ProfileMenu items={gameMenu} />
+                    </div>
                     {room.status === "question" && active && activeTile && panelMode === "hidden" && room.revealed && (
                         <ResultToast key={`${active.col}-${active.row}`} room={room} />
                     )}
@@ -146,6 +183,24 @@ export default function HostGame({ code, onExit, onLogout, onNewRoom }: Props) {
                 </div>
             </main>
         </div>
+    );
+}
+
+// Remaining time of a time-limited game, red in the last minute. Display only: the
+// expiry effect in HostGame is what actually ends the game.
+function GameClock({ endsAt }: { endsAt: number }) {
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        const id = setInterval(() => setNow(Date.now()), 500);
+        return () => clearInterval(id);
+    }, []);
+    const left = Math.max(0, endsAt - now);
+    const m = Math.floor(left / 60_000);
+    const s = Math.floor((left % 60_000) / 1000);
+    return (
+        <span className={`text-sm font-bold px-2 py-0.5 rounded ${left < 60_000 ? "bg-red-500" : "bg-black/30"}`}>
+            ⏳ {m}:{String(s).padStart(2, "0")}
+        </span>
     );
 }
 

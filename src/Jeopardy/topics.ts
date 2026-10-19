@@ -23,6 +23,7 @@ export const TOPICS: TopicInfo[] = [
     { id: "oop", name: "Object-Oriented Programming", tagline: "Classes, objects, inheritance — any language", group: "coding" },
     { id: "ux-ui", name: "UX/UI Design", tagline: "Users, layout, color and accessibility", group: "design" },
     { id: "graphic-design", name: "Graphic Design", tagline: "Principles, color, type and formats", group: "design" },
+    { id: "design-thinking", name: "Design Thinking", tagline: "Empatizar, entrevistas, mapas de empatía y journey", group: "design" },
     { id: "ai", name: "Artificial Intelligence", tagline: "ML, prompts, data and safe use", group: "ai" },
     { id: "technology", name: "Technology", tagline: "Gadgets, internet and tech history", group: "ai" },
     { id: "english-a1", name: "English A1", tagline: "Beginner English", group: "english" },

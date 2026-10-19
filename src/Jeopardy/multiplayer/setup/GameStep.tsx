@@ -1,6 +1,12 @@
 import Tabs from "../Tabs";
 import {
+    BOARD_SIZE_CHOICES,
+    boardSizeOf,
+    GAME_MINUTES_CHOICES,
+    gameMinutesOf,
     READ_SECONDS_CHOICES,
+    setBoardSize,
+    setGameMinutes,
     setReadSeconds,
     setStartSeconds,
     setTimerSeconds,
@@ -11,9 +17,33 @@ import {
 
 const seconds = (choices: number[]) => choices.map((n) => ({ value: n, label: `${n} s` }));
 
-// Step 3: the three clocks of a game, each a segmented control with a one-line hint
+// Step 3: the three clocks of a game plus its length (board size and optional time
+// limit), each a segmented control with a one-line hint
 export default function GameStep({ room }: { room: Room }) {
+    const size = boardSizeOf(room);
+    const minutes = gameMinutesOf(room);
+    const questions = size * size;
+    // Rough duration: reading + answering + ~12 s of picking tiles and celebrating per question
+    const estimate = Math.max(1, Math.round((questions * (room.readSeconds + room.timerSeconds + 12)) / 60));
+
     const rows = [
+        {
+            title: "🧩 Board size",
+            hint: `${size}×${size} = ${questions} questions, roughly ${estimate} min of play.`,
+            items: BOARD_SIZE_CHOICES.map((n) => ({ value: n, label: `${n}×${n}` })),
+            value: size,
+            set: (n: number) => setBoardSize(room.code, n),
+        },
+        {
+            title: "⏳ Time limit",
+            hint:
+                minutes > 0
+                    ? `The game ends at ${minutes} min with the scores as they are${estimate > minutes ? ` (a full board takes ~${estimate} min, so it will probably cut it)` : ""}.`
+                    : "No limit: the game ends when the board is empty.",
+            items: GAME_MINUTES_CHOICES.map((n) => ({ value: n, label: n === 0 ? "None" : `${n} min` })),
+            value: minutes,
+            set: (n: number) => setGameMinutes(room.code, n),
+        },
         {
             title: "📖 Reading time",
             hint: "The question is shown alone first, so everyone can read it.",
