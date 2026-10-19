@@ -6,8 +6,8 @@ description: Everything about the "Do you know your English?" Jeopardy game in s
 # Jeopardy game ("Do you know your English?")
 
 A classroom quiz game. The host shows the board on a big screen; players answer
-multiple-choice questions on their phones. 19 topics / 1025 questions, organized in groups
-(`GROUPS` in topics.ts, tabs in Setup): 💻 Coding (Java, C#, JavaScript — 75 each — HTML & CSS, OOP),
+multiple-choice questions on their phones. 20 topics / 1100 questions, organized in groups
+(`GROUPS` in topics.ts, tabs in Setup): 💻 Coding (Java, "Java a Fondo" — in Spanish —, C#, JavaScript — 75 each — HTML & CSS, OOP),
 🎨 Design (UX/UI, Graphic Design), 🤖 Tech & AI (AI, Technology), 🇬🇧 English (A1, B1), 🎉 Popular Culture (Popular Culture, Video Games, Books), 🎵 Music (Rap & Hip-Hop, Reggaeton, Pop, Rock), ⚽ Sports (50 each). Live at **https://jeopardy-76b82.web.app**.
 
 This repo (`react_test`) is a lab of class examples; `src/App.tsx` currently renders only `<Jeopardy />`.
@@ -38,7 +38,7 @@ Routing is hand-written in `src/Jeopardy/Jeopardy.tsx` (no router library): `vie
 | `questions.ts` | `Tile`/`Category` types, `shuffle`, `pickOne`, `markUsed`, `allUsed`, `LETTERS`, `VALUES`; plus the legacy `BANK` + `buildBoard()` used only by the hidden local mode |
 | `questionService.ts` | `loadQuestions(topic)` (Firestore `questions` query) and `buildBoardFrom(questions)` (5 categories × 5 values, options shuffled) |
 | `topics.ts` | `GROUPS` (tab row) and `TOPICS`: id/name/tagline/group cards for Setup (ids must match `content/`) |
-| `content/` | Source of all questions (`java.ts`, `csharp.ts`, `javascript.ts`, `htmlCss.ts`, `oop.ts`, `ai.ts`, `uxUi.ts`, `graphicDesign.ts`, `popCulture.ts`, `englishA1.ts`, `englishB1.ts`, `technology.ts`, `videoGames.ts`, `books.ts`, `rap.ts`, `reggaeton.ts`, `pop.ts`, `rock.ts`, `sports.ts`, `index.ts`, `types.ts`). Uploaded by the seed script; **never imported by the app** so answers stay out of the bundle |
+| `content/` | Source of all questions (`java.ts`, `javaDepth.ts` — Spanish —, `csharp.ts`, `javascript.ts`, `htmlCss.ts`, `oop.ts`, `ai.ts`, `uxUi.ts`, `graphicDesign.ts`, `popCulture.ts`, `englishA1.ts`, `englishB1.ts`, `technology.ts`, `videoGames.ts`, `books.ts`, `rap.ts`, `reggaeton.ts`, `pop.ts`, `rock.ts`, `sports.ts`, `index.ts`, `types.ts`). Uploaded by the seed script; **never imported by the app** so answers stay out of the bundle |
 | `teams.ts` | `Team` type (`id`, `name`, `score`, `color?`), `makeTeams(n)` (local mode only), `rankTeams` (competition ranking for the podium) |
 | `teamNames.ts` | `TEAM_NAMES` pool (16 color + animal names, e.g. "Red Fox", each with a hex color) and `pickTeamNames(n, taken)` |
 | `Board.tsx` | Category × value grid |
@@ -120,6 +120,7 @@ Every room write goes through `mutate(code, room => newRoom)`, which runs a **Fi
 - Host game screen is one viewport (`h-dvh`), **nothing scrolls**: sidebar (compact rows from 6 teams, no list scrollbar) + board whose rows stretch + `HostQuestionView` with auto-fitting text. Phones show a single "Your team: 800 · 2nd of 3" line instead of all teams' scores.
 - **Last question**: ⭐ badge on host and phones while it's open; after its reveal the main button reads "🏆 See final results". Closing it → `GameOverSplash` on every screen, then podium (animated rise + confetti); phones add "Your team finished 2nd of 3!".
 - Topic name is shown in the host board header and in the phones' question header. Programming topics use language-prefixed category names (Java…, C#…, JS…) so boards can't be confused.
+- The app's UI is in English; question content may be in Spanish per topic ("Java a Fondo" is). Browser-tab title: "Classroom Jeopardy 🎓" (index.html) plus a per-view `document.title` in Jeopardy.tsx ("Sala ABCD · …" on host/player); favicon is an inline-SVG 🎓.
 - Players can join mid-game and pick any team that isn't full; the team count and names can only change before the game (setup or lobby). Teams never vanish on their own (only empty ones at start).
 - A player's "Leave game" (and the closed-room / kicked messages) goes back to **the join form with the code prefilled**, not home.
 - Mid-game, a team whose **last member leaves** vanishes (score included, inside `leaveRoom`'s transaction); when **no team has players left** the room goes to `end` and the end screens show "Everyone left the game" instead of a winner. Only the explicit Leave button triggers this — a closed browser never says goodbye (presence detection is a backlog idea).

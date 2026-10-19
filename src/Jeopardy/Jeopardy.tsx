@@ -73,6 +73,12 @@ function Screens(): ReactNode {
         return () => removeEventListener("popstate", onPop);
     }, []);
 
+    // The tab's title says where you are, handy with several test tabs open
+    useEffect(() => {
+        const base = "Classroom Jeopardy 🎓";
+        document.title = view.kind === "host" || view.kind === "player" ? `Sala ${view.code} · ${base}` : base;
+    }, [view]);
+
     function go(path: string, replace = false) {
         if (replace) history.replaceState(null, "", path);
         else history.pushState(null, "", path);

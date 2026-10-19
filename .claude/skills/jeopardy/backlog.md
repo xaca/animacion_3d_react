@@ -44,6 +44,8 @@ teams, countdown, podium). Roughly ordered by value for a classroom.
 - Speed bonus for the fastest correct team, measured as reaction time on each phone (from options shown to tap). Fair across network delay but trusts the phone; could be an option in Setup.
 - Penalty for wrong answers (e.g. −half value) to discourage guessing.
 
+- Nuevo tema "Java a Fondo" (75 preguntas en español: cortocircuito/ternario/rarezas, cadenas, funciones, arreglos, matrices). Tab title "Classroom Jeopardy 🎓" + dynamic per-screen title + 🎓 favicon. 20 topics / 1100 questions.
+
 ## Known issues
 
 1. **Rooms are never cleaned up** if the host closes the tab instead of clicking "Close room".

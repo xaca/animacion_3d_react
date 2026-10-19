@@ -16,6 +16,7 @@ export const GROUPS: TopicGroup[] = [
 
 export const TOPICS: TopicInfo[] = [
     { id: "java", name: "Java Fundamentals", tagline: "Variables to methods, for beginners", group: "coding" },
+    { id: "java-depth", name: "Java a Fondo", tagline: "Cortocircuito, ternario, cadenas, arreglos y matrices", group: "coding" },
     { id: "csharp", name: "C# Fundamentals", tagline: "Variables to methods, for beginners", group: "coding" },
     { id: "javascript", name: "JavaScript Fundamentals", tagline: "Variables, functions, arrays and objects", group: "coding" },
     { id: "html-css", name: "HTML & CSS", tagline: "Tags, selectors, colors and layout", group: "coding" },

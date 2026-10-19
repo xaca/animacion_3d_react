@@ -1,4 +1,5 @@
 import { java } from "./java";
+import { javaDepth } from "./javaDepth";
 import { csharp } from "./csharp";
 import { javascript } from "./javascript";
 import { htmlCss } from "./htmlCss";
@@ -21,5 +22,5 @@ import type { TopicContent } from "./types";
 
 // Everything the seed script uploads. The app itself never imports this
 // (questions reach it through Firestore), so answers stay out of the bundle.
-export const TOPIC_CONTENT: TopicContent[] = [java, csharp, javascript, htmlCss, oop, ai, uxUi, graphicDesign, popCulture, englishA1, englishB1,
-    technology, videoGames, books, rap, reggaeton, pop, rock, sports];
+export const TOPIC_CONTENT: TopicContent[] = [java, javaDepth, csharp, javascript, htmlCss, oop, ai, uxUi, graphicDesign, popCulture, englishA1,
+    englishB1, technology, videoGames, books, rap, reggaeton, pop, rock, sports];
