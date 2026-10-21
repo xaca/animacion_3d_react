@@ -2,7 +2,8 @@
 // from content/ so the app bundle doesn't ship the questions; the app loads them from
 // Firestore by id.
 export type TopicGroup = { id: string; name: string };
-export type TopicInfo = { id: string; name: string; tagline: string; group: string };
+// isNew: shows a "✨ Nuevo" badge on the topic card (remove the flag when it gets old)
+export type TopicInfo = { id: string; name: string; tagline: string; group: string; isNew?: boolean };
 
 export const GROUPS: TopicGroup[] = [
     { id: "coding", name: "💻 Coding" },
@@ -17,6 +18,13 @@ export const GROUPS: TopicGroup[] = [
 export const TOPICS: TopicInfo[] = [
     { id: "java", name: "Java Fundamentals", tagline: "Variables to methods, for beginners", group: "coding" },
     { id: "java-depth", name: "Java a Fondo", tagline: "Cortocircuito, ternario, cadenas, arreglos y matrices", group: "coding" },
+    { id: "java-fundamentos", name: "Java Fundamentos", tagline: "Qué es Java, main, consola, compilar — en español", group: "coding", isNew: true },
+    { id: "java-variables", name: "Java Variables", tagline: "Tipos, nombres, casting — en español", group: "coding", isNew: true },
+    { id: "java-condicionales", name: "Java Condicionales", tagline: "if/else, lógicos, switch — en español", group: "coding", isNew: true },
+    { id: "java-ciclos", name: "Java Ciclos", tagline: "while, for, break, anidados — en español", group: "coding", isNew: true },
+    { id: "java-strings", name: "Java Strings", tagline: "Concatenar, buscar, equals — en español", group: "coding", isNew: true },
+    { id: "java-arreglos-basico", name: "Java Arreglos", tagline: "Crear, recorrer, operar — en español", group: "coding", isNew: true },
+    { id: "java-matrices", name: "Java Matrices", tagline: "Filas, columnas, recorridos — en español", group: "coding", isNew: true },
     { id: "csharp", name: "C# Fundamentals", tagline: "Variables to methods, for beginners", group: "coding" },
     { id: "javascript", name: "JavaScript Fundamentals", tagline: "Variables, functions, arrays and objects", group: "coding" },
     { id: "html-css", name: "HTML & CSS", tagline: "Tags, selectors, colors and layout", group: "coding" },

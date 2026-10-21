@@ -3,7 +3,6 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type Reac
 import Board from "../Board";
 import EndScreen from "../EndScreen";
 import GameOverSplash from "../GameOverSplash";
-import { TOPICS } from "../topics";
 import HostLobby from "./HostLobby";
 import HostQuestionView from "./HostQuestionView";
 import HostSetup from "./HostSetup";
@@ -11,7 +10,7 @@ import ProfileMenu, { type MenuItem } from "./ProfileMenu";
 import ScorePanel from "./ScorePanel";
 import { toggleRoomDebug } from "./debugSwitch";
 import { MOTION, usePanelMode } from "./panelMode";
-import { applySettings, backToLobby, createRoom, deleteRoom, endGame, newGame, openTile, type Room } from "./roomService";
+import { applySettings, backToLobby, createRoom, deleteRoom, endGame, newGame, openTile, topicLabel, type Room } from "./roomService";
 import { Message } from "./ui";
 import { useRoom } from "./useRoom";
 
@@ -95,6 +94,7 @@ export default function HostGame({ code, onExit, onLogout, onNewRoom }: Props) {
         const next = await createRoom();
         await applySettings(next, {
             topic: r.topic,
+            topicName: r.topicName,
             readSeconds: r.readSeconds,
             timerSeconds: r.timerSeconds,
             startSeconds: r.startSeconds,
@@ -130,7 +130,7 @@ export default function HostGame({ code, onExit, onLogout, onNewRoom }: Props) {
 
     const active = room.activeTile;
     const activeTile = active ? room.board[active.col].tiles[active.row] : null;
-    const topic = TOPICS.find((t) => t.id === room.topic)?.name ?? room.topic;
+    const topic = topicLabel(room);
 
     const humans = Object.values(room.players).filter((p) => !p.bot).length;
     const gameMenu: MenuItem[] = [

@@ -13,7 +13,7 @@ type Props = {
 
 // "⚡ Same as last time" shortcut: one click to reuse the previous setup on this device
 export default function QuickStart({ last, keepTeams, busy, onOpenNow, onNewTopic }: Props) {
-    const topic = TOPICS.find((t) => t.id === last.topic)?.name;
+    const topic = last.topicName ?? TOPICS.find((t) => t.id === last.topic)?.name;
     const bolt = useRef<HTMLSpanElement>(null);
 
     // Soft ring around the ⚡ to draw the eye (repeats a few times, then rests)

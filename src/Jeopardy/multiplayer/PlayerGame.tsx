@@ -8,8 +8,7 @@ import Podium from "../Podium";
 import { MOTION } from "./panelMode";
 import { LETTERS } from "../questions";
 import { rankTeams, type Team } from "../teams";
-import { TOPICS } from "../topics";
-import { activeTileOf, answer, APP_VERSION, answerOf, answerProgress, chooseTeam, isLastTile, leaveRoom, optionsVisible, type Player, type Room } from "./roomService";
+import { activeTileOf, answer, APP_VERSION, answerOf, answerProgress, chooseTeam, isLastTile, leaveRoom, optionsVisible, topicLabel, type Player, type Room } from "./roomService";
 import { linkButton, Message, Screen } from "./ui";
 import { useRoom } from "./useRoom";
 import { useServerCheck } from "./useServerCheck";
@@ -235,7 +234,7 @@ function AnswerPicker({ room, player }: { room: Room; player: Player }) {
     const done = room.revealed;
     // Reading time (`reading` above): question only. The host screen reveals the options for everyone at once.
     const { answered, total } = answerProgress(room);
-    const topic = TOPICS.find((t) => t.id === room.topic)?.name ?? room.topic;
+    const topic = topicLabel(room);
 
     return (
         <>

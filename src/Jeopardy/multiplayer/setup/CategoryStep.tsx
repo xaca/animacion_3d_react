@@ -1,16 +1,17 @@
 import type { MouseEvent } from "react";
-import { GROUPS, TOPICS } from "../../topics";
+import { GROUPS, type TopicInfo } from "../../topics";
 import { pulse } from "./anim";
 
 type Props = {
     group: string;
     topic: string;
+    topics: TopicInfo[]; // built-in + uploaded (custom) topics, merged by HostSetup
     onPick: (group: string) => void;
 };
 
 // Step 1: the topic groups as big cards. Picking one moves on to its topics.
-export default function CategoryStep({ group, topic, onPick }: Props) {
-    const current = TOPICS.find((t) => t.id === topic)?.group;
+export default function CategoryStep({ group, topic, topics, onPick }: Props) {
+    const current = topics.find((t) => t.id === topic)?.group;
 
     function pick(e: MouseEvent<HTMLButtonElement>, id: string) {
         pulse(e.currentTarget);
@@ -21,7 +22,7 @@ export default function CategoryStep({ group, topic, onPick }: Props) {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 w-full max-w-5xl">
             {GROUPS.map((g) => {
                 const [emoji, ...rest] = g.name.split(" ");
-                const count = TOPICS.filter((t) => t.group === g.id).length;
+                const count = topics.filter((t) => t.group === g.id).length;
                 const selected = g.id === group;
                 return (
                     <button

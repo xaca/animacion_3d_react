@@ -20,9 +20,42 @@ service cloud.firestore {
       }
     }
 
-    // Question bank, uploaded by scripts/seed-questions.ts with the Admin SDK
-    // (which bypasses these rules). The app only reads it.
+    // Question bank. The seeded content (ids without prefix) is read-only and uploaded by
+    // scripts/seed-questions.ts with the rules dance. The in-app JSON uploader may write
+    // ONLY `custom-` docs with a strict shape — the official bank stays locked.
     match /questions/{id} {
+      allow read: if true;
+      allow create, update: if id.matches('^custom-.*') && isCustomQuestion(request.resource.data);
+      allow delete: if id.matches('^custom-.*');
+    }
+
+    // Cards of the teacher-uploaded topics (📥 Subir tema JSON). Same trust model as the
+    // rooms: shape-validated, writable by the app (the UI sits behind the host PIN).
+    match /custom_topics/{id} {
+      allow read: if true;
+      allow create, update: if id.matches('^custom-.*') && isCustomTopic(request.resource.data) && request.resource.data.id == id;
+      allow delete: if id.matches('^custom-.*');
+    }
+
+    // TingoTango rooms (src/TingoTango): same open-room model as Jeopardy, own collection
+    match /tingo_rooms/{code} {
+      allow read, delete: if true;
+      allow create: if code.matches('^[A-Z]{4}$') && isTingoRoom(request.resource.data) && request.resource.data.code == code;
+      allow update: if isTingoRoom(request.resource.data) && request.resource.data.code == code;
+
+      // Debug reports (teacher's 🐞 console): one per phone while room.debug is on
+      match /debug/{playerId} {
+        allow read, delete: if true;
+        allow create, update: if request.resource.data.keys().hasOnly(['playerId', 'name', 'team', 'version', 'summary',
+            'lastUpdateAt', 'fromCache', 'error', 'clockOffsetMs', 'sentAt', 'log'])
+          && request.resource.data.playerId == playerId
+          && request.resource.data.log is list && request.resource.data.log.size() <= 40;
+      }
+    }
+
+    // TingoTango question bank, uploaded by scripts/seed-tingo.ts (same 3-step rules
+    // dance as `questions`). The app only reads it.
+    match /tingo_questions/{id} {
       allow read: if true;
       allow write: if false;
     }
@@ -34,9 +67,34 @@ service cloud.firestore {
 
     function isRoom(data) {
       return data.keys().hasOnly(['code', 'version', 'createdAt', 'status', 'teams', 'board', 'activeTile', 'answers', 'players',
-          'topic', 'timerSeconds', 'maxTeamSize', 'startSeconds', 'readSeconds', 'startsAt', 'readEndsAt', 'optionsAt',
+          'topic', 'topicName', 'timerSeconds', 'maxTeamSize', 'startSeconds', 'readSeconds', 'startsAt', 'readEndsAt', 'optionsAt',
           'questionEndsAt', 'revealed', 'debug', 'rev', 'boardSize', 'gameMinutes', 'gameEndsAt'])
         && data.status in ['setup', 'lobby', 'board', 'question', 'end'];
+    }
+
+    function isCustomQuestion(d) {
+      return d.keys().hasOnly(['topic', 'category', 'level', 'question', 'code', 'answer', 'wrong'])
+        && d.topic is string && d.topic.matches('^custom-.*')
+        && d.category is string && d.category.size() <= 60
+        && d.level is int && d.level >= 1 && d.level <= 5
+        && d.question is string && d.question.size() <= 500
+        && d.answer is string && d.answer.size() <= 300
+        && d.wrong is list && d.wrong.size() == 3;
+    }
+
+    function isCustomTopic(d) {
+      return d.keys().hasOnly(['id', 'name', 'tagline', 'group', 'isNew', 'createdAt'])
+        && d.id is string && d.name is string && d.name.size() > 0 && d.name.size() <= 60
+        && d.tagline is string && d.tagline.size() <= 120
+        && d.group is string && d.group.size() <= 30
+        && d.isNew is bool && d.createdAt is number;
+    }
+
+    function isTingoRoom(data) {
+      return data.keys().hasOnly(['code', 'version', 'createdAt', 'status', 'topic', 'readSeconds', 'answerSeconds',
+          'players', 'playedIds', 'round', 'selectedId', 'question', 'queue', 'readEndsAt', 'optionsAt',
+          'questionEndsAt', 'revealed', 'choice', 'hops', 'hopMs', 'questionCount', 'debug', 'rev'])
+        && data.status in ['lobby', 'tingo', 'tango', 'end'];
     }
   }
 }

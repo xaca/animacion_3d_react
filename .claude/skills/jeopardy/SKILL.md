@@ -10,7 +10,7 @@ multiple-choice questions on their phones. 20 topics / 1100 questions, organized
 (`GROUPS` in topics.ts, tabs in Setup): 💻 Coding (Java, "Java a Fondo" — in Spanish —, C#, JavaScript — 75 each — HTML & CSS, OOP),
 🎨 Design (UX/UI, Graphic Design), 🤖 Tech & AI (AI, Technology), 🇬🇧 English (A1, B1), 🎉 Popular Culture (Popular Culture, Video Games, Books), 🎵 Music (Rap & Hip-Hop, Reggaeton, Pop, Rock), ⚽ Sports (50 each). Live at **https://jeopardy-76b82.web.app**.
 
-This repo (`react_test`) is a lab of class examples; `src/App.tsx` currently renders only `<Jeopardy />`.
+This repo (`react_test`) is a lab of class examples; `src/App.tsx` routes by prefix: `/tingo/*` renders the independent TingoTango game (`src/TingoTango`, own Firestore collections `tingo_rooms`/`tingo_questions`), everything else renders `<Jeopardy />`.
 Stack: React 19 + TypeScript (strict, `noUnusedLocals`) + Vite + Tailwind 4 + Firebase 13 (Firestore + Hosting).
 
 For improvement ideas and known issues, read [backlog.md](backlog.md) before planning new work.
@@ -39,7 +39,7 @@ Routing is hand-written in `src/Jeopardy/Jeopardy.tsx` (no router library): `vie
 | `questionService.ts` | `loadQuestions(topic)` (Firestore `questions` query) and `buildBoardFrom(questions)` (5 categories × 5 values, options shuffled) |
 | `topics.ts` | `GROUPS` (tab row) and `TOPICS`: id/name/tagline/group cards for Setup (ids must match `content/`) |
 | `content/` | Source of all questions (`java.ts`, `javaDepth.ts` — Spanish —, `csharp.ts`, `javascript.ts`, `htmlCss.ts`, `oop.ts`, `ai.ts`, `uxUi.ts`, `graphicDesign.ts`, `popCulture.ts`, `englishA1.ts`, `englishB1.ts`, `technology.ts`, `videoGames.ts`, `books.ts`, `rap.ts`, `reggaeton.ts`, `pop.ts`, `rock.ts`, `sports.ts`, `index.ts`, `types.ts`). Uploaded by the seed script; **never imported by the app** so answers stay out of the bundle |
-| `teams.ts` | `Team` type (`id`, `name`, `score`, `color?`), `makeTeams(n)` (local mode only), `rankTeams` (competition ranking for the podium) |
+| `teams.ts` | `Team` type (`id`, `name`, `score`, `color?`), `makeTeams(n)` (local mode only), `rankTeams` (STRICT ranking for the podium: no shared places; ties break by `scoredSeq` — who reached the score first — then name) |
 | `teamNames.ts` | `TEAM_NAMES` pool (13 Spanish animal + classic-color names, e.g. "Zorro Rojo"; no cyan/magenta per the user) and `pickTeamNames(n, taken)` |
 | `Board.tsx` | Category × value grid |
 | `QuestionModal.tsx` | **Local mode only** now: question + options + reveal (multiplayer host uses `HostQuestionView`) |
@@ -117,7 +117,7 @@ Every room write goes through `mutate(code, room => newRoom)`, which runs a **Fi
 - **Host PIN**: `/host` and `/host/CODE` show `HostLogin` until the PIN is entered; remembered on the device until "Log out". Players never see it.
 - **Same build for everyone**: `createRoom` stores `APP_VERSION`; a device on an older build reloads itself once when it opens the room (`useRoom`). `index.html` is served `no-cache` so a reload always gets the latest build. After a deploy: host a **new** room; old phones update when they join.
 - **Every team answers, once**: whoever on the team taps first answers for the whole team (`answer()` records right or wrong, no points yet). Teams don't race each other.
-- **Every correct team scores** the tile value, given inside `revealAnswer` (once, even if called twice). Wrong or no answer = 0.
+- **Every correct team scores** the tile value, given inside `revealAnswer` (once, even if called twice). Wrong or no answer = 0. The reveal also stamps `team.scoredSeq` (monotonic, in answer order) so the podium never shares a step: equal totals rank by who reached the score first (strict `rankTeams`); `scoredSeq` resets with the scores on startGame/newGame.
 - **The host screen is the only clock** (fairness decision after the clock-skew problems): it calls `showOptions` when its reading countdown ends and `revealAnswer` when its answer countdown ends **+ 1 s grace** (`CLOSE_GRACE_MS`), as soon as `allTeamsAnswered`, or on "Show answer". `answer()` checks only `optionsAt !== null && !revealed` — never a clock. Phones show bars with `LocalCountdown`, which runs N seconds from when the update reached that phone.
 - Before the reveal the big screen shows "N/M teams answered" and which teams answered (not what); phones show their own team's pending choice. After it, the score panel shows each team's +value / ✘ / —, the question shows who got it, phones show their team's result. Host then clicks **Next question**. No manual +/− score buttons (removed at the user's request).
 - Host game screen is one viewport (`h-dvh`), **nothing scrolls**: sidebar (compact rows from 6 teams, no list scrollbar) + board whose rows stretch + `HostQuestionView` with auto-fitting text. Phones show a single "Your team: 800 · 2nd of 3" line instead of all teams' scores.
@@ -148,7 +148,9 @@ Every room write goes through `mutate(code, room => newRoom)`, which runs a **Fi
 
 **Test alone (one phone):** host a room, in the waiting room click "🧪 Add test player" (`addBot`: "🤖 Bot N" on the emptiest team; `removeBots` clears them), join from your phone on another team, play. The host tab must stay open: it answers for the bots.
 
-**Add or edit questions:** edit the topic file in `src/Jeopardy/content/`. Each category needs 5 levels × ≥2 questions; wrong options plausible for the audience, **and length-balanced**: the seed script and the round test fail any question whose correct answer is clearly the longest option (more words than every wrong one AND >1.5× the chars of the longest) or clearly the shortest — students learned to pick the longest option. Fix by making 1–2 wrong options as long as the answer (mirrored statements work well). Then **seed** (below) and run `npm run test:jeopardy`.
+**Upload a topic WITHOUT the rules dance (teacher UI):** Setup menu -> "📥 Subir tema (JSON)". Paste/pick a JSON (template downloadable there; shape = content/ format + name/tagline/group), validated in-app by the SAME validator as the seed (`src/Jeopardy/contentValidation.ts`). It writes to `questions` with a `custom-` id/topic prefix — the ONLY ids the rules let the browser write — plus a card in `custom_topics` ({id,name,tagline,group,isNew,createdAt}, live-merged into Setup via `multiplayer/customTopics.ts`; ✨ isNew toggles and delete live there too). Rooms store `topicName` so phones never read `custom_topics`; `topicLabel(room)` is the display helper. The seeded bank (unprefixed ids) stays locked.
+
+**Add or edit questions (official seeded bank):** edit the topic file in `src/Jeopardy/content/`. Each category needs 5 levels × ≥2 questions; wrong options plausible for the audience, **and length-balanced**: the seed script and the round test fail any question whose correct answer is clearly the longest option (more words than every wrong one AND >1.5× the chars of the longest) or clearly the shortest — students learned to pick the longest option. Fix by making 1–2 wrong options as long as the answer (mirrored statements work well). Then **seed** (below) and run `npm run test:jeopardy`.
 
 **Add a topic:** new file in `content/` (5 categories × 5 levels × ≥2), register it in `content/index.ts` **and** `topics.ts` (with a `group`; new groups go in `GROUPS`), seed, test.
 

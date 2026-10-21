@@ -4,6 +4,7 @@ const KEY = "jeopardy-setup-last";
 
 export type LastSetup = {
     topic: string;
+    topicName?: string; // display name (uploaded topics aren't in topics.ts)
     readSeconds: number;
     timerSeconds: number;
     startSeconds: number;

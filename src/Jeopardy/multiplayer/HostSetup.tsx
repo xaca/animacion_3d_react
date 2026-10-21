@@ -1,10 +1,11 @@
 import gsap from "gsap";
-import { useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { GROUPS, TOPICS } from "../topics";
 import { MOTION } from "./panelMode";
+import { asTopicInfo, useCustomTopics } from "./customTopics";
 import { toggleRoomDebug } from "./debugSwitch";
 import ProfileMenu, { type MenuItem } from "./ProfileMenu";
-import { applySettings, cleanRooms, listOldRooms, openRoom, type Room } from "./roomService";
+import { applySettings, cleanRooms, listOldRooms, openRoom, topicLabel, type Room } from "./roomService";
 import { loadLastSetup, saveLastSetup, type LastSetup } from "./setupPrefs";
 import { pulse, staggerIn } from "./setup/anim";
 import CategoryStep from "./setup/CategoryStep";
@@ -13,6 +14,9 @@ import QuickStart from "./setup/QuickStart";
 import TeamsStep from "./setup/TeamsStep";
 import TopicStep from "./setup/TopicStep";
 import Tabs from "./Tabs";
+
+// Downloaded only when the teacher opens "📥 Subir tema (JSON)"
+const UploadTopicModal = lazy(() => import("./setup/UploadTopicModal"));
 
 type Props = {
     room: Room;
@@ -31,6 +35,10 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
     const [last] = useState<LastSetup | null>(loadLastSetup);
     const [step, setStep] = useState(0);
     const [visited, setVisited] = useState<Set<number>>(() => new Set([0]));
+    const [uploading, setUploading] = useState(false);
+    // Built-in topics + the teacher's uploaded ones (custom_topics, live)
+    const custom = useCustomTopics();
+    const allTopics = useMemo(() => [...TOPICS, ...custom.map(asTopicInfo)], [custom]);
     const [group, setGroup] = useState(() => TOPICS.find((t) => t.id === room.topic)?.group ?? GROUPS[0].id);
     const [students, setStudents] = useState(() => last?.students ?? room.teams.length * room.maxTeamSize);
     // Never more "per team" than students (the calculator grays those sizes out)
@@ -41,7 +49,6 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
     const busyRef = useRef(false);
 
     const players = Object.values(room.players);
-    const topic = TOPICS.find((t) => t.id === room.topic);
 
     function goTo(next: number) {
         const to = clamp(next, 0, STEPS.length - 1);
@@ -69,6 +76,7 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
         run(async () => {
             saveLastSetup({
                 topic: room.topic,
+                topicName: topicLabel(room),
                 readSeconds: room.readSeconds,
                 timerSeconds: room.timerSeconds,
                 startSeconds: room.startSeconds,
@@ -93,7 +101,7 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
     });
     const quickOpen = (s: LastSetup) =>
         run(async () => {
-            await applySettings(room.code, { topic: s.topic, ...quickSettings(s) });
+            await applySettings(room.code, { topic: s.topic, topicName: s.topicName, ...quickSettings(s) });
             saveLastSetup(s);
             await openRoom(room.code);
         });
@@ -129,7 +137,8 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
 
     const confirmDrop = () => players.length === 0 || confirm(`${players.length} players will be disconnected. Continue?`);
     const menu: MenuItem[] = [
-        { label: "🐞 Debug mode", on: room.debug === true, onClick: () => toggleRoomDebug(room.code, room.debug !== true) },
+        { label: "📥 Subir tema (JSON)", onClick: () => setUploading(true) },
+        { label: "🐞 Debug mode", on: room.debug === true, onClick: () => toggleRoomDebug(room.code, room.debug !== true), separatorBefore: true },
         { label: "🧹 Clean old rooms", onClick: () => void cleanOldRooms() },
         ...(players.length > 0 ? [{ label: "✨ Start over in a new room", onClick: () => confirmDrop() && onNewRoom() }] : []),
         { label: "Cancel room", onClick: () => confirmDrop() && onExit(), danger: true, separatorBefore: true },
@@ -172,7 +181,7 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
                 <header className="w-full flex flex-wrap items-center justify-between gap-3">
                     <h1 className="text-3xl md:text-4xl font-bold">Set up the game</h1>
                     <div className="flex flex-wrap items-center justify-center gap-2 text-lg">
-                        <Summary text={topic?.name ?? room.topic} strong />
+                        <Summary text={topicLabel(room)} strong />
                         <Summary text={`read ${room.readSeconds} s · answer ${room.timerSeconds} s`} />
                         <Summary
                             text={`${room.boardSize ?? 5}×${room.boardSize ?? 5}${(room.gameMinutes ?? 0) > 0 ? ` · ${room.gameMinutes} min` : ""}`}
@@ -222,6 +231,7 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
                         <CategoryStep
                             group={group}
                             topic={room.topic}
+                            topics={allTopics}
                             onPick={(g) => {
                                 setGroup(g);
                                 goTo(1);
@@ -229,7 +239,7 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
                         />
                     </>
                 )}
-                {step === 1 && <TopicStep room={room} group={group} onChangeGroup={() => goTo(0)} />}
+                {step === 1 && <TopicStep room={room} group={group} topics={allTopics} onChangeGroup={() => goTo(0)} />}
                 {step === 2 && <GameStep room={room} />}
                 {step === 3 && <TeamsStep room={room} students={students} perTeam={perTeam} onCalc={calc} />}
             </div>
@@ -251,6 +261,11 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
                     </button>
                 )}
             </footer>
+            {uploading && (
+                <Suspense fallback={null}>
+                    <UploadTopicModal onClose={() => setUploading(false)} />
+                </Suspense>
+            )}
         </div>
     );
 }

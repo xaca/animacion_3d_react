@@ -2,7 +2,6 @@ import gsap from "gsap";
 import { useLayoutEffect, useRef, useState } from "react";
 import Countdown from "../Countdown";
 import type { Team } from "../teams";
-import { TOPICS } from "../topics";
 import { useFitText } from "../useFitText";
 import { toggleRoomDebug } from "./debugSwitch";
 import JoinQr from "./JoinQr";
@@ -20,6 +19,7 @@ import {
     startCountdown,
     startGame,
     startProblem,
+    topicLabel,
     type Player,
     type Room,
 } from "./roomService";
@@ -61,7 +61,7 @@ export default function HostLobby({ room, onExit, onLogout }: Props) {
         }
     }
 
-    const topic = TOPICS.find((t) => t.id === room.topic)?.name ?? room.topic;
+    const topic = topicLabel(room);
     const debug = room.debug === true;
     const humans = players.filter((p) => !p.bot).length;
     const spots = room.teams.reduce((sum, t) => sum + capacityOf(room, t), 0);
@@ -103,84 +103,92 @@ export default function HostLobby({ room, onExit, onLogout }: Props) {
     }, []);
 
     return (
+        // Natural flow on EVERY size (scroll only when needed, never clipped): the teams
+        // are the point of this screen, so the join header is compact and the team cards
+        // get the room. Sticky footer keeps Start always in view.
         <div
             ref={root}
-            className="h-dvh overflow-hidden text-white flex flex-col gap-2 px-4 py-3 bg-[#2a3698] [background-image:radial-gradient(rgba(255,255,255,0.09)_1.5px,transparent_1.5px)] [background-size:26px_26px]"
+            className="min-h-dvh text-white flex flex-col gap-2 px-3 md:px-4 py-3 bg-[#2a3698] [background-image:radial-gradient(rgba(255,255,255,0.09)_1.5px,transparent_1.5px)] [background-size:26px_26px]"
         >
             <header className="shrink-0 flex items-start justify-between gap-4">
-                <h1 className="hl-item text-3xl md:text-4xl font-bold">
+                <h1 className="hl-item text-2xl md:text-4xl font-bold">
                     Quizzing with Friends <span className="opacity-60 text-lg font-normal">🎓</span>
                 </h1>
                 <ProfileMenu items={menu} />
             </header>
 
-            <section className="shrink-0 mt-3 flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
-                <div className="hl-qr bg-white rounded-2xl p-2 shadow-xl">
-                    <JoinQr code={room.code} size={210} />
+            {/* Compact header: QR + code in ONE card, topic and head-count beside it */}
+            <section className="shrink-0 mt-1 flex flex-wrap items-center justify-center gap-4">
+                <div className="hl-panel bg-[#1c2470] rounded-2xl p-3 md:p-4 shadow-xl flex flex-wrap items-center justify-center gap-4 text-center">
+                    <div className="hl-qr bg-white rounded-xl p-2 shadow">
+                        <JoinQr code={room.code} size={150} />
+                    </div>
+                    <div className="flex flex-col items-center gap-1 max-w-sm">
+                        <p className="text-base md:text-xl break-all">
+                            Go to <b>{location.host}/join</b>
+                        </p>
+                        <p className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-[0.25em] bg-black/30 rounded-xl px-4 py-1">{room.code}</p>
+                        <p className="text-sm opacity-80">enter the code or scan the QR</p>
+                    </div>
                 </div>
-                <div className="hl-panel bg-[#1c2470] rounded-2xl px-8 py-4 shadow-xl flex flex-col items-center gap-1 text-center">
-                    <p className="text-xl md:text-2xl">
-                        Go to <b>{location.host}/join</b> and enter the code
+                <div className="hl-item flex flex-col items-center lg:items-start gap-1 text-center lg:text-left max-w-md">
+                    <p className="text-2xl md:text-3xl font-bold">{topic}</p>
+                    {/* Live head-count against the total spots (a +1 team counts as its bigger size) */}
+                    <p className="text-xl md:text-2xl font-bold">
+                        {spots > 0 && players.length >= spots ? (
+                            <>🎉 All {spots} in!</>
+                        ) : (
+                            <>
+                                👥 <CountUp value={players.length} className="text-yellow-300" />/{spots} players ·{" "}
+                                <CountUp value={Math.max(0, spots - players.length)} className="text-yellow-300" /> left to join
+                            </>
+                        )}
                     </p>
-                    <p className="text-6xl md:text-7xl font-bold tracking-[0.3em] bg-black/30 rounded-xl px-6 py-1">{room.code}</p>
-                    <p className="opacity-80">or scan the QR code</p>
+                    {bonusCount > 0 && (
+                        <p className="text-sm opacity-80">
+                            ℹ️ {spots} doesn't split evenly: {bonusCount === 1 ? "one team will have" : `${bonusCount} teams will have`}{" "}
+                            {room.maxTeamSize + 1} players instead of {room.maxTeamSize}
+                        </p>
+                    )}
                 </div>
             </section>
 
-            <p className="hl-item shrink-0 text-center text-3xl md:text-4xl font-bold">{topic}</p>
-
-            {/* Live head-count against the total spots (a +1 team counts as its bigger size) */}
-            <div className="hl-item shrink-0 text-center">
-                <p className="text-2xl md:text-3xl font-bold">
-                    {spots > 0 && players.length >= spots ? (
-                        <>🎉 All {spots} in!</>
-                    ) : (
-                        <>
-                            👥 <CountUp value={players.length} className="text-yellow-300" />/{spots} players ·{" "}
-                            <CountUp value={Math.max(0, spots - players.length)} className="text-yellow-300" /> left to join
-                        </>
-                    )}
-                </p>
-                {bonusCount > 0 && (
-                    <p className="text-sm opacity-80">
-                        ℹ️ {spots} doesn't split evenly: {bonusCount === 1 ? "one team will have" : `${bonusCount} teams will have`}{" "}
-                        {room.maxTeamSize + 1} players instead of {room.maxTeamSize}
-                    </p>
-                )}
-            </div>
-
-            <main className="flex-1 min-h-0 w-full max-w-6xl mx-auto flex flex-wrap content-center justify-center gap-3 overflow-hidden">
+            {/* The teams take the rest: full cards, natural height, never clipped */}
+            <main className="flex-1 w-full max-w-6xl mx-auto flex flex-wrap content-start justify-center gap-3 py-2">
                 {room.teams.map((team) => (
                     <TeamCard key={team.id} team={team} cap={capacityOf(room, team)} members={players.filter((p) => p.team === team.id)} />
                 ))}
             </main>
 
             {counting && room.startsAt !== null ? (
-                /* Last call: one centered panel, nothing competing beside it */
-                <footer className="shrink-0 w-full max-w-3xl mx-auto flex flex-col items-center gap-2 bg-black/20 rounded-2xl px-6 py-3">
-                    <p className="text-2xl md:text-3xl font-bold text-yellow-300">Game starts soon — last call to pick a team!</p>
-                    <div className="w-full max-w-xl">
-                        <Countdown endsAt={room.startsAt} totalSeconds={room.startSeconds} onDone={start} />
+                /* Last call: sticky so Start now / Cancel never scroll away */
+                <footer className="sticky bottom-0 z-30 shrink-0 -mx-3 md:-mx-4 px-3 md:px-4 py-2 bg-[#2a3698]/95 backdrop-blur border-t border-white/10">
+                    <div className="w-full max-w-3xl mx-auto flex flex-col items-center gap-2">
+                        <p className="text-xl md:text-3xl font-bold text-yellow-300">Game starts soon — last call to pick a team!</p>
+                        <div className="w-full max-w-xl">
+                            <Countdown endsAt={room.startsAt} totalSeconds={room.startSeconds} onDone={start} />
+                        </div>
+                        <div className="flex gap-6 items-center">
+                            <button className={primaryButton} onClick={start} disabled={starting}>
+                                {starting ? "Loading questions…" : "Start now"}
+                            </button>
+                            <button className={linkButton} onClick={() => cancelCountdown(room.code)} disabled={starting}>
+                                Cancel
+                            </button>
+                        </div>
+                        {error && <p className="text-yellow-300 font-bold">{error}</p>}
                     </div>
-                    <div className="flex gap-6 items-center">
-                        <button className={primaryButton} onClick={start} disabled={starting}>
-                            {starting ? "Loading questions…" : "Start now"}
-                        </button>
-                        <button className={linkButton} onClick={() => cancelCountdown(room.code)} disabled={starting}>
-                            Cancel
-                        </button>
-                    </div>
-                    {error && <p className="text-yellow-300 font-bold">{error}</p>}
                 </footer>
             ) : (
-                <footer className="shrink-0 w-full flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-                    <p className="bg-black/30 rounded-full px-4 py-1.5 text-xs md:text-sm opacity-90">
+                /* Sticky: even when the page scrolls, Start never leaves the screen */
+                <footer className="sticky bottom-0 z-30 shrink-0 -mx-3 md:-mx-4 px-3 md:px-4 py-2 bg-[#2a3698]/95 backdrop-blur border-t border-white/10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                    <p className="hidden sm:block bg-black/30 rounded-full px-4 py-1.5 text-xs md:text-sm opacity-90">
                         {room.readSeconds} s to read + {room.timerSeconds} s to answer · {boardSizeOf(room)}×{boardSizeOf(room)} board ·{" "}
                         {gameMinutesOf(room) > 0 ? `${gameMinutesOf(room)} min limit` : "no time limit"} · {room.teams.length}{" "}
                         {room.teams.length === 1 ? "team" : "teams"}
                     </p>
 
-                    <div className="flex-1 min-w-64 flex flex-col items-center gap-1 text-center">
+                    <div className="flex-1 min-w-40 flex flex-col items-center gap-1 text-center">
                         {unassigned.length > 0 && <p className="text-sm opacity-80">Choosing a team: {unassigned.map((p) => p.name).join(", ")}</p>}
                         {players.length === 0 && <p className="opacity-80">Waiting for players…</p>}
                         {players.length > spots && (
@@ -216,7 +224,7 @@ function StartButton({ onClick, disabled, starting }: { onClick: () => void; dis
             ref={el}
             onClick={onClick}
             disabled={disabled}
-            className="bg-yellow-300 text-black text-2xl md:text-3xl font-bold px-10 py-3 rounded-xl shadow-lg cursor-pointer hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+            className="bg-yellow-300 text-black text-xl md:text-3xl font-bold px-6 md:px-10 py-2.5 md:py-3 rounded-xl shadow-lg cursor-pointer hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
         >
             {starting ? "Loading questions…" : "Start game"}
         </button>

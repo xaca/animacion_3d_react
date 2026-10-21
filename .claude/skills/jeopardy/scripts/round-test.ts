@@ -272,6 +272,21 @@ try {
     room = await read(code);
     const expected = room.teams.map((t) => (t.id === alpha || t.id === beta ? tile.value : 0)).join(",");
     check(room.revealed && scores(room) === expected, `both correct teams scored ${tile.value} exactly once, the wrong one 0 (scores ${scores(room)})`);
+    // Podium tie-breaker: correct teams get scoredSeq in answer order, so equal totals
+    // never share a podium step (strict rankTeams)
+    {
+        const answerOrder = room.answers.filter((a) => a.correct).map((a) => a.team);
+        const seqOf = (id: string) => room.teams.find((t) => t.id === id)?.scoredSeq;
+        const seqs = answerOrder.map(seqOf);
+        check(
+            seqs.every((s) => typeof s === "number") && (seqs[0] as number) < (seqs[1] as number),
+            `correct teams carry scoredSeq in answer order for the podium tie-break (${seqs.join(",")})`
+        );
+        check(
+            room.teams.find((t) => t.id === gamma)?.scoredSeq === undefined,
+            "a team that didn't score carries no scoredSeq"
+        );
+    }
 
     // Next question clears the answers
     await rs.closeTile(code);

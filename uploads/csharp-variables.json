@@ -1,0 +1,252 @@
+{
+    "name": "C# Variables",
+    "tagline": "Tipos, var, nombres y casting — en español",
+    "group": "coding",
+    "categories": {
+        "Declaración y asignación": [
+            [
+                { "question": "¿Cuál declara una variable entera llamada puntos en C#?", "answer": "int puntos;", "wrong": ["puntos int;", "entero puntos;", "Dim puntos;"] },
+                { "question": "¿Qué símbolo asigna un valor a una variable en C#?", "answer": "=", "wrong": ["==", "=>", ":="] }
+            ],
+            [
+                {
+                    "question": "¿Qué hace la palabra var en C#?",
+                    "answer": "El compilador deduce el tipo por el valor",
+                    "wrong": ["La variable acepta cualquier tipo siempre", "Crea una variable global", "Es solo para números"]
+                },
+                {
+                    "question": "¿Qué imprime?",
+                    "code": "int a;\na = 4 + 3;\nConsole.WriteLine(a);",
+                    "answer": "7",
+                    "wrong": ["43", "4 + 3", "Error de compilación"]
+                }
+            ],
+            [
+                {
+                    "question": "¿De qué tipo queda x?",
+                    "code": "var x = 10;",
+                    "answer": "int (lo deduce del 10)",
+                    "wrong": ["var (su propio tipo)", "object (acepta de todo)", "Depende de cómo se use"]
+                },
+                {
+                    "question": "¿Se puede usar var sin valor inicial?",
+                    "code": "var x;",
+                    "answer": "No compila: var necesita el valor",
+                    "wrong": ["Sí, x queda en null", "Sí, x queda en 0", "Solo dentro de un ciclo"]
+                }
+            ],
+            [
+                { "question": "¿Cuál declara DOS variables enteras en una sola línea?", "answer": "int a, b;", "wrong": ["int a y b;", "int a + b;", "a, b: int;"] },
+                {
+                    "question": "¿Qué imprime?",
+                    "code": "int a = 5;\nint b = a;\nb = 9;\nConsole.WriteLine(a);",
+                    "answer": "5 (b era una copia aparte)",
+                    "wrong": ["9 (a sigue los cambios de b)", "14 (suma los dos valores)", "Error de compilación"]
+                }
+            ],
+            [
+                {
+                    "question": "¿Qué imprime?",
+                    "code": "int x = 3;\nx += x;\nx *= 2;\nConsole.WriteLine(x);",
+                    "answer": "12",
+                    "wrong": ["9", "6", "18"]
+                },
+                {
+                    "question": "¿Qué imprime?",
+                    "code": "var a = 2;\nvar b = a;\na = 7;\nConsole.WriteLine(\"\" + a + b);",
+                    "answer": "72",
+                    "wrong": ["22", "77", "27"]
+                }
+            ]
+        ],
+        "Tipos enteros": [
+            [
+                { "question": "¿Qué tipo guarda enteros como 100 en C#?", "answer": "int", "wrong": ["double", "string", "bool"] },
+                { "question": "¿Cuál de estos valores cabe en un int?", "answer": "500", "wrong": ["5.5", "\"500\"", "quinientos"] }
+            ],
+            [
+                { "question": "¿Qué tipo entero guarda números MÁS grandes que int?", "answer": "long", "wrong": ["short", "byte", "char"] },
+                { "question": "¿Qué imprime?", "code": "Console.WriteLine(9 / 2);", "answer": "4", "wrong": ["4.5", "5", "Error de compilación"] }
+            ],
+            [
+                {
+                    "question": "¿Qué guarda el tipo byte?",
+                    "answer": "Enteros de 0 a 255",
+                    "wrong": ["Enteros negativos grandes", "Una letra o un símbolo", "Decimales muy pequeños"]
+                },
+                { "question": "¿Qué imprime?", "code": "int monedas = 10;\nConsole.WriteLine(monedas % 4);", "answer": "2", "wrong": ["2.5", "4", "0"] }
+            ],
+            [
+                {
+                    "question": "¿Por qué no compila?",
+                    "code": "int n = 9999999999;",
+                    "answer": "No cabe en un int (usa long)",
+                    "wrong": ["Falta la f al final", "Tiene demasiados 9 seguidos", "int no acepta números impares"]
+                },
+                {
+                    "question": "¿Qué imprime?",
+                    "code": "int x = 7;\nx = x / 3 * 3;\nConsole.WriteLine(x);",
+                    "answer": "6 (7/3 es 2 por ser enteros)",
+                    "wrong": ["7 (se anulan las operaciones)", "9 (redondea hacia arriba)", "Error de compilación"]
+                }
+            ],
+            [
+                {
+                    "question": "¿Hasta aproximadamente qué valor llega un int en C#?",
+                    "answer": "Unos 2.100 millones",
+                    "wrong": ["Unos 65 mil", "Unos 9 trillones", "No tiene ningún límite"]
+                },
+                {
+                    "question": "¿Qué imprime?",
+                    "code": "Console.WriteLine(8 % 3 + 8 / 3);",
+                    "answer": "4 (2 + 2)",
+                    "wrong": ["8 (4 + 4)", "5 (2 + 3)", "2.6"]
+                }
+            ]
+        ],
+        "Decimales y bool": [
+            [
+                { "question": "¿Qué tipo guarda un decimal como 3.14 normalmente?", "answer": "double", "wrong": ["int", "bool", "char"] },
+                { "question": "¿Cómo se llama el tipo lógico (verdadero/falso) en C#?", "answer": "bool", "wrong": ["boolean", "bit", "logic"] }
+            ],
+            [
+                { "question": "¿Cuál asigna bien un float en C#?", "answer": "float f = 2.5f;", "wrong": ["float f = 2.5;", "float f = 2.5d;", "float f = \"2.5\";"] },
+                { "question": "¿Qué imprime?", "code": "bool b = 5 > 8;\nConsole.WriteLine(b);", "answer": "False", "wrong": ["True", "0", "Error de compilación"] }
+            ],
+            [
+                {
+                    "question": "¿Qué tipo usa C# para DINERO con precisión exacta?",
+                    "answer": "decimal (sufijo m)",
+                    "wrong": ["double (sufijo d)", "float (sufijo f)", "money (sufijo $)"]
+                },
+                { "question": "¿Qué imprime?", "code": "Console.WriteLine(7.0 / 2);", "answer": "3.5", "wrong": ["3", "4", "Error de compilación"] }
+            ],
+            [
+                {
+                    "question": "¿Qué imprime?",
+                    "code": "double d = 1 / 2;\nConsole.WriteLine(d);",
+                    "answer": "0 (1/2 entre enteros da 0)",
+                    "wrong": ["0.5 (la división es decimal)", "1 (redondea hacia arriba)", "Error de compilación"]
+                },
+                {
+                    "question": "¿Cuál asigna bien un precio con decimal?",
+                    "answer": "decimal precio = 19.99m;",
+                    "wrong": ["decimal precio = 19.99;", "decimal precio = m19.99;", "decimal precio = \"19.99\";"]
+                }
+            ],
+            [
+                { "question": "¿Qué imprime?", "code": "Console.WriteLine(10 / 4.0);", "answer": "2.5", "wrong": ["2", "3", "Error de compilación"] },
+                {
+                    "question": "¿Qué imprime?",
+                    "code": "bool b = true;\nConsole.WriteLine(!b == false);",
+                    "answer": "True",
+                    "wrong": ["False", "!true", "Error de compilación"]
+                }
+            ]
+        ],
+        "Nombres y convenciones": [
+            [
+                { "question": "¿Puede un nombre de variable empezar con un número?", "answer": "No, nunca", "wrong": ["Sí, siempre", "Solo si es un número par", "Solo en las constantes"] },
+                {
+                    "question": "¿Qué estilo se usa para variables locales en C#?",
+                    "answer": "camelCase (miEdad)",
+                    "wrong": ["kebab-case (mi-edad)", "Con espacios (mi edad)", "TODO EN MAYÚSCULA"]
+                }
+            ],
+            [
+                {
+                    "question": "¿C# distingue entre las variables total y Total?",
+                    "answer": "Sí, son dos variables distintas",
+                    "wrong": ["No, son exactamente la misma", "Solo dentro de un ciclo", "Solo si una es constante"]
+                },
+                {
+                    "question": "¿Cuál es un nombre INVÁLIDO de variable?",
+                    "answer": "mi-nota (el guion no se permite)",
+                    "wrong": ["nota2 (termina en número)", "_nota (empieza con guion bajo)", "miNota (mezcla mayúsculas)"]
+                }
+            ],
+            [
+                {
+                    "question": "¿Qué estilo usa C# para propiedades y métodos públicos?",
+                    "answer": "PascalCase (MiEdad)",
+                    "wrong": ["camelCase (miEdad)", "snake_case (mi_edad)", "kebab-case (mi-edad)"]
+                },
+                {
+                    "question": "¿Cómo se declara una constante en C#?",
+                    "answer": "const int MAX = 10;",
+                    "wrong": ["constant int MAX = 10;", "final int MAX = 10;", "let MAX = 10;"]
+                }
+            ],
+            [
+                {
+                    "question": "¿Qué pasa aquí?",
+                    "code": "int class = 5;",
+                    "answer": "No compila: class es palabra reservada",
+                    "wrong": ["Compila sin ningún problema", "Compila solo dentro del Main", "Compila pero con advertencia"]
+                },
+                { "question": "¿Cuál de estos nombres SÍ es válido en C# (aunque raro)?", "answer": "@class", "wrong": ["mi nombre", "9vidas", "su-total"] }
+            ],
+            [
+                {
+                    "question": "¿Qué imprime?",
+                    "code": "int suma = 4;\nint Suma = 6;\nConsole.WriteLine(suma + Suma);",
+                    "answer": "10 (son dos variables distintas)",
+                    "wrong": ["8 (la primera contada dos veces)", "12 (la segunda contada doble)", "Error: nombre repetido"]
+                },
+                { "question": "¿Cuál de estas palabras está reservada en C#?", "answer": "namespace", "wrong": ["espacio", "Main", "Program"] }
+            ]
+        ],
+        "Conversiones (casting)": [
+            [
+                {
+                    "question": "¿De int a double hace falta casting explícito?",
+                    "answer": "No: esa conversión es automática",
+                    "wrong": ["Sí, siempre con (double) adelante", "Sí, siempre con (int) adelante", "No se puede convertir nunca"]
+                },
+                {
+                    "question": "¿Cómo se llama convertir un valor de un tipo a otro?",
+                    "answer": "Casting (conversión)",
+                    "wrong": ["Printing (impresión)", "Looping (repetición)", "Naming (nombramiento)"]
+                }
+            ],
+            [
+                { "question": "¿Cuál convierte un double a int?", "answer": "int x = (int) 7.8;", "wrong": ["int x = int(7.8);", "int x = 7.8 a int;", "int x = [int] 7.8;"] },
+                {
+                    "question": "¿Qué imprime?",
+                    "code": "int x = (int) 6.9;\nConsole.WriteLine(x);",
+                    "answer": "6 (se corta el decimal)",
+                    "wrong": ["7 (redondea al más cercano)", "6.9 (queda igual)", "Error de compilación"]
+                }
+            ],
+            [
+                { "question": "¿Cómo se convierte el texto \"25\" en un número int?", "answer": "int.Parse(\"25\")", "wrong": ["(int) \"25\"", "\"25\".ToInt()", "int(\"25\")"] },
+                { "question": "¿Qué imprime?", "code": "double d = 3;\nConsole.WriteLine(d + 0.5);", "answer": "3.5", "wrong": ["3", "35", "Error de compilación"] }
+            ],
+            [
+                {
+                    "question": "¿Qué hace Convert.ToInt32(\"8\")?",
+                    "answer": "Convierte el texto a entero 8",
+                    "wrong": ["Crea 32 copias del 8", "Convierte el 8 a texto", "Devuelve siempre el 32"]
+                },
+                {
+                    "question": "¿Qué pasa con int.Parse(\"hola\")?",
+                    "answer": "FormatException al ejecutar",
+                    "wrong": ["Devuelve 0 sin ningún error", "Devuelve null en silencio", "No compila por el texto"]
+                }
+            ],
+            [
+                {
+                    "question": "¿Qué imprime?",
+                    "code": "int a = 9, b = 2;\nConsole.WriteLine((double) a / b);",
+                    "answer": "4.5",
+                    "wrong": ["4", "5", "Error de compilación"]
+                },
+                {
+                    "question": "¿Qué hace int.TryParse(\"abc\", out int n)?",
+                    "answer": "Devuelve false y deja n en 0",
+                    "wrong": ["Lanza FormatException al momento", "Devuelve null dentro de n", "No compila por el texto abc"]
+                }
+            ]
+        ]
+    }
+}

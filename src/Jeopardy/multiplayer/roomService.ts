@@ -25,7 +25,8 @@ export type Room = {
     code: string;
     version: string; // APP_VERSION of the host that created the room
     status: RoomStatus;
-    topic: string; // TOPICS id; the board is built from its questions on start
+    topic: string; // TOPICS id (or custom-… for uploaded topics); the board is built from its questions on start
+    topicName?: string; // display name stored in the room, so phones never need the custom_topics collection
     timerSeconds: number;
     maxTeamSize: number; // players per team, set by the host in setup
     startSeconds: number; // last call after the host presses Start, before empty teams are dropped
@@ -246,6 +247,7 @@ export async function createRoom(): Promise<string> {
         createdAt: Date.now(),
         status: "setup",
         topic: TOPICS[0].id,
+        topicName: TOPICS[0].name,
         timerSeconds: 20,
         maxTeamSize: DEFAULT_TEAM_SIZE,
         startSeconds: DEFAULT_START_SECONDS,
@@ -341,8 +343,15 @@ export async function backToSetup(code: string) {
     await mutate(code, (room) => (room.status === "lobby" ? { ...room, status: "setup", startsAt: null } : room));
 }
 
-export async function setTopic(code: string, topic: string) {
-    await mutate(code, (room) => ({ ...room, topic }));
+// `topicName` keeps the display name in the room (uploaded topics aren't in topics.ts)
+export async function setTopic(code: string, topic: string, topicName?: string) {
+    const name = topicName ?? TOPICS.find((t) => t.id === topic)?.name ?? topic;
+    await mutate(code, (room) => ({ ...room, topic, topicName: name }));
+}
+
+// What to call the room's topic on any screen, without consulting any collection
+export function topicLabel(room: Room): string {
+    return room.topicName ?? TOPICS.find((t) => t.id === room.topic)?.name ?? room.topic;
 }
 
 export async function setTimerSeconds(code: string, timerSeconds: number) {
@@ -412,6 +421,7 @@ export async function setTeamCount(code: string, count: number) {
 
 export type SetupSettings = {
     topic?: string;
+    topicName?: string; // display name for uploaded (custom-) topics
     readSeconds?: number;
     timerSeconds?: number;
     startSeconds?: number;
@@ -429,7 +439,11 @@ export async function applySettings(code: string, s: SetupSettings) {
     await mutate(code, (room) => {
         if (!beforeGame(room)) return room;
         let next = { ...room };
-        if (s.topic !== undefined && TOPICS.some((t) => t.id === s.topic)) next.topic = s.topic;
+        // Built-in topics or teacher-uploaded ones (custom- prefix, questions live in Firestore)
+        if (s.topic !== undefined && (TOPICS.some((t) => t.id === s.topic) || s.topic.startsWith("custom-"))) {
+            next.topic = s.topic;
+            next.topicName = s.topicName ?? TOPICS.find((t) => t.id === s.topic)?.name ?? s.topic;
+        }
         if (ok(s.readSeconds, READ_SECONDS_CHOICES)) next.readSeconds = s.readSeconds;
         if (ok(s.timerSeconds, TIMER_CHOICES)) next.timerSeconds = s.timerSeconds;
         if (ok(s.startSeconds, START_SECONDS_CHOICES)) next.startSeconds = s.startSeconds;
@@ -490,7 +504,12 @@ export async function startGame(code: string) {
             ...room,
             status: "board",
             board,
-            teams: teams.map((t) => ({ ...t, score: 0 })),
+            // Fresh game: scores AND the tie-breaker seq start clean
+            teams: teams.map((t) => {
+                const { scoredSeq: _drop, ...rest } = t;
+                void _drop;
+                return { ...rest, score: 0 };
+            }),
             startsAt: null,
             gameEndsAt: minutes > 0 ? Date.now() + minutes * 60_000 : null,
             activeTile: null,
@@ -543,11 +562,18 @@ export async function revealAnswer(code: string) {
         mutate(code, (room) => {
             const tile = activeTileOf(room);
             if (!tile || room.revealed) return room;
-            const winners = new Set(room.answers.filter((a) => a.correct).map((a) => a.team));
+            // Winners in answers-array order: that's the commit order in Firestore, the
+            // only clock-free "who was first" we have. scoredSeq breaks podium ties
+            // later (equal totals → whoever reached its score first, see rankTeams).
+            const order = room.answers.filter((a) => a.correct).map((a) => a.team);
+            const seqBase = Math.max(0, ...room.teams.map((t) => t.scoredSeq ?? 0));
             return {
                 ...room,
                 revealed: true,
-                teams: room.teams.map((t) => (winners.has(t.id) ? { ...t, score: t.score + tile.value } : t)),
+                teams: room.teams.map((t) => {
+                    const i = order.indexOf(t.id);
+                    return i === -1 ? t : { ...t, score: t.score + tile.value, scoredSeq: seqBase + 1 + i };
+                }),
             };
         })
     );
@@ -582,7 +608,11 @@ export async function newGame(code: string) {
             ...room,
             status: "setup",
             board: [],
-            teams: room.teams.map((t) => ({ ...t, score: 0 })),
+            teams: room.teams.map((t) => {
+                const { scoredSeq: _drop, ...rest } = t;
+                void _drop;
+                return { ...rest, score: 0 };
+            }),
             startsAt: null,
             gameEndsAt: null,
             activeTile: null,
