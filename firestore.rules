@@ -68,7 +68,7 @@ service cloud.firestore {
     function isRoom(data) {
       return data.keys().hasOnly(['code', 'version', 'createdAt', 'status', 'teams', 'board', 'activeTile', 'answers', 'players',
           'topic', 'topicName', 'timerSeconds', 'maxTeamSize', 'startSeconds', 'readSeconds', 'startsAt', 'readEndsAt', 'optionsAt',
-          'questionEndsAt', 'revealed', 'debug', 'rev', 'boardSize', 'gameMinutes', 'gameEndsAt'])
+          'questionEndsAt', 'revealed', 'debug', 'extras', 'effects', 'playedCount', 'rev', 'boardSize', 'gameMinutes', 'gameEndsAt'])
         && data.status in ['setup', 'lobby', 'board', 'question', 'end'];
     }
 

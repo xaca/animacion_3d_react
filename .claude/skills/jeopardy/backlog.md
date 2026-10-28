@@ -39,10 +39,24 @@ teams, countdown, podium). Roughly ordered by value for a classroom.
 - 8 new topics (50 each): Technology (in the AI tab, renamed 🤖 Tech & AI), Video Games and Books (🎉 Popular Culture), Rap & Hip-Hop, Reggaeton, Pop, Rock (new 🎵 Music tab), Sports with soccer, basketball and NBA/NCAA/NFL/NHL/FIFA team names (new ⚽ Sports tab). 19 topics / 1025 questions.
 - Host setup redesign: 4 free step tabs (shadcn-Tabs look, plain Tailwind + GSAP), class calculator (students → teams, manual selects kept), ⚡ Quick start from the last setup, profile menu (Cancel room / Log out / new room), after a game the teacher picks "Next game, same room" (`newGame`, players keep their teams) or "New room"; phones show a "Get ready!" card meanwhile.
 
+## Done in v5 (2026-10-21)
+
+- **Extras: optional game modes** (new "Extras" setup step, 5 tabs now; `room.extras`, all off by default = classic game): ⚡ Speed bonus (first correct team by Firestore commit order, no phone clocks, +50% of the value), 🔥 Hot streak (3 correct in a row → correct answers worth ×2 until a miss; 🔥 badge in the sidebar), 💀 Penalty (wrong = −half value, floor at 0; not answering is free), 🚀 Comeback (strictly-last team +25% on correct answers). Applied in one fixed order inside `revealAnswer`, which stamps `gained`/`bonuses` on each answer so host footer, sidebar marks, ResultToast and phones all show the same breakdown. Saved in Quick start (`setupPrefs.extras`), kept by `newGame`, streaks reset on start. Rules: `extras` key in `isRoom()` — **deploy rules before the app** (with old rules only the Extras toggles fail, the game is unaffected). Round test section 5 plays a 4-question round asserting every bonus.
+- **🃏 Power-ups** (5th extra; the teacher enables it, students use them): buttons on each phone during the reading time (`PowerBar`, two-tap confirm, states ready/active/♻ recharging/🔒 locked) — 🎯 50/50 (strikes 2 options for that team only), ✖2 double (✖3 on fire), 🛡️ shield (cancels any loss, spent either way), 🏴‍☠️ steal from the leader (unlocks with the team's first 3-streak, full value on fire, blocked by the victim's shield). One per team per question, recharge after 4 closed questions (`playedCount`), reset on new game; host sees declared powers as chips; `activatePower` validates everything in the transaction. Rules: `effects` + `playedCount` keys — a build with this code needs the new rules to play at all (deploy rules → test → deploy app).
+- Planned next phases (plan v2, 2026-10-22, after class feedback: early ties, then trailing teams lose interest because 🏴‍☠️/🔥 feed the leaders):
+  - ~~**2.5a ⚖️ Balance**~~ → done 2026-10-22 (see below), pending class test.
+  - **2.5b ⏱️ Pace & reveal**: ranked speed bonus (1st +50% / 2nd +25% / 3rd +10%), answer time 10 s and "by difficulty", ⏩ hurry-up (5 s left once half the teams answered), reveal style (instant / 3 s suspense / distribution bars then answer), who-picked-what chips, 🙈 hidden scores in the last N questions, auto-next after N s.
+  - Then 🎁 surprise tiles (catch-up flavored), 🎰 final wager round, 👩‍🏫 host lifelines (50/50 for all, swap question, +10 s).
+
+## Done 2026-10-22
+
+- **Closed games**: no joining and no team switching once the game starts (also on the podium and during the next setup); both reopen in the next game's lobby. Players without a team at start stay and wait (`LateWait`); a player who leaves mid-game can't come back to that game (Leave asks for confirmation). Reverses the v3 "loose players can join mid-game" rule. Client-side only, no rules or Room shape change. Round test updated (mid-game, podium, setup and next-lobby checks).
+
+- **⚖️ Balance (phase 2.5a)**: 🏴‍☠️ steal from a team the student picks (only teams ahead, so the leader can't steal; no streak lock; full value if the stealer is last), new 🧊 freeze (halves a picked team's gain), recharge by place (last 2 · middle 3 · leader 5 questions), 🆘 rescue (2 × top value behind → all powers back, once per game), 🚀 for the whole bottom half (last +50%), new 👑 Leader tax extra (leader keeps 80%, off by default), red "X wants to steal from you!" line on the aimed team's phones. No rules change (all inside `extras`/`effects`/teams). Round test section 5 rewritten for it.
+
 ## Ideas parked (decided against for now)
 
-- Speed bonus for the fastest correct team, measured as reaction time on each phone (from options shown to tap). Fair across network delay but trusts the phone; could be an option in Setup.
-- Penalty for wrong answers (e.g. −half value) to discourage guessing.
+- ~~Speed bonus~~ / ~~penalty for wrong answers~~ → shipped in v5 as optional Extras (commit-order speed bonus instead of phone reaction time).
 
 - Nuevo tema "Java a Fondo" (75 preguntas en español: cortocircuito/ternario/rarezas, cadenas, funciones, arreglos, matrices). Tab title "Classroom Jeopardy 🎓" + dynamic per-screen title + 🎓 favicon. 20 topics / 1100 questions.
 

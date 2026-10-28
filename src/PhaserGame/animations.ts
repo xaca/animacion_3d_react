@@ -37,6 +37,15 @@ export function registerAnimations(scene: Phaser.Scene) {
 
   // Slime bounce: squash ↔ stretch
   createAnim(scene, 'slime-bounce', [{ key: 'slime0' }, { key: 'slime1' }], 4);
+
+  // Moblin: walk cycle plus single-frame poses for each attack state
+  createAnim(scene, 'moblin-walk', [{ key: 'moblin_walk0' }, { key: 'moblin_walk1' }], 6);
+  createAnim(scene, 'moblin-windup', [{ key: 'moblin_windup' }], 1);
+  createAnim(scene, 'moblin-lunge', [{ key: 'moblin_lunge' }], 1);
+  createAnim(scene, 'moblin-charge', [{ key: 'moblin_charge' }], 1);
+  createAnim(scene, 'moblin-roar', [{ key: 'moblin_roar' }], 1);
+
+  createAnim(scene, 'fireball-flicker', [{ key: 'fireball0' }, { key: 'fireball1' }], 12);
 }
 
 function createAnim(scene: Phaser.Scene, key: string, frames: Frames, frameRate: number, repeat = -1) {

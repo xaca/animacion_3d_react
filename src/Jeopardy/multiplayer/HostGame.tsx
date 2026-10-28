@@ -225,9 +225,11 @@ function ResultToast({ room }: { room: Room }) {
         >
             {teams.map((t) => {
                 const a = room.answers.find((x) => x.team === t.id);
+                // gained carries the extras (bonuses, 💀 losses); older answers fall back to the tile value
+                const mark = !a ? "—" : a.correct ? `+${a.gained ?? value}` : (a.gained ?? 0) < 0 ? `${a.gained}` : "✘";
                 return (
                     <span key={t.id} className="border-l-8 pl-2" style={{ borderLeftColor: t.color }}>
-                        {t.name} <b>{!a ? "—" : a.correct ? `+${value}` : "✘"}</b>
+                        {t.name} <b>{mark}</b>
                     </span>
                 );
             })}

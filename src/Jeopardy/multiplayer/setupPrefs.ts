@@ -1,3 +1,5 @@
+import type { Extras } from "./roomService";
+
 // The host's last setup, remembered on this device for the "⚡ Quick start" card and
 // the class calculator. Only a convenience: without storage the card just doesn't show.
 const KEY = "jeopardy-setup-last";
@@ -14,6 +16,7 @@ export type LastSetup = {
     perTeam: number;
     boardSize?: number; // added later: missing in older saved setups
     gameMinutes?: number;
+    extras?: Extras; // also later; applySettings keeps only the known boolean keys
 };
 
 const NUMBERS = ["readSeconds", "timerSeconds", "startSeconds", "teamCount", "maxTeamSize", "students", "perTeam"] as const;

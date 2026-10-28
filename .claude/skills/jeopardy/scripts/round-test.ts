@@ -5,7 +5,8 @@
 // 2. Question collection (Firestore): every topic is seeded.
 // 3. Live round (Firestore): creates a throwaway room, plays it with 6 fake players, deletes it.
 //    Checks: setup blocks joins until openRoom, host sets team count / max size / start countdown / new names,
-//    full-team rule, Start runs the countdown, empty teams dropped at start, loose players rejoin mid-game,
+//    full-team rule, Start runs the countdown, empty teams dropped at start, no joining or team switching
+//    once the game started (loose players wait for the next game),
 //    board built from the topic, reading time before the options, every team answers once (first teammate
 //    counts), points for every correct team given once at the reveal, reveal locks answers.
 //
@@ -17,6 +18,7 @@ import { VALUES } from "../../../../src/Jeopardy/questions";
 import { TOPIC_CONTENT } from "../../../../src/Jeopardy/content";
 import { buildBoardFrom } from "../../../../src/Jeopardy/questionService";
 import { TOPICS } from "../../../../src/Jeopardy/topics";
+import { rankTeams } from "../../../../src/Jeopardy/teams";
 import * as rs from "../../../../src/Jeopardy/multiplayer/roomService";
 import { splitClass } from "../../../../src/Jeopardy/multiplayer/teamMath";
 import { startReporting } from "../../../../src/Jeopardy/multiplayer/debugReports";
@@ -230,15 +232,23 @@ try {
     check(room.gameEndsAt != null && room.gameEndsAt > Date.now() + 9 * 60_000, "a 10 min limit sets the game's end time");
     check(room.teams.length === 3 && !room.teams.some((t) => t.id === delta2), "the empty team was eliminated");
     check(room.players[fay.id].team === null, "a player without a team stays in the room");
+    // Teams are fixed once the game starts: no picking, no switching, no new players
     await rs.chooseTeam(code, fay.id, gamma);
+    await rs.chooseTeam(code, ana.id, beta);
     room = await read(code);
-    check(room.players[fay.id].team === gamma, "a loose player can join a team mid-game");
+    check(room.players[fay.id].team === null, "a loose player can't pick a team mid-game (waits for the next game)");
+    check(room.players[ana.id].team === alpha, "a player can't switch teams mid-game");
+    const lateJoin = await rs.joinRoom(code, "Zoe").then(
+        () => "joined",
+        (e) => (e instanceof Error ? e.message : String(e))
+    );
+    check(lateJoin === rs.GAME_IN_PROGRESS, `joining mid-game is rejected (${lateJoin})`);
 
     check(room.board.length === 5, `board has 5 categories (got ${room.board.length})`);
     check(room.board.every((c) => c.tiles.length === VALUES.length), "every category has 5 tiles");
     check(rs.tilesLeft(room) === 25, "25 tiles to play at the start");
 
-    // Teams now: alpha (Ana, Dan, Eve), beta (Ben), gamma (Cam, Fay).
+    // Teams now: alpha (Ana, Dan, Eve), beta (Ben), gamma (Cam); Fay waits without a team.
     // Round 1 (reading time): options hidden and answers rejected until the host's showOptions;
     // then Ana (alpha) and Ben (beta) answer correctly at the same moment, Cam (gamma) wrong
     await rs.setReadSeconds(code, 10);
@@ -311,12 +321,11 @@ try {
     check(scores(room) === expected, "wrong and missing answers cost no points");
     await rs.closeTile(code);
 
-    // A player without a team can't answer
+    // A player without a team (Fay, waiting for the next game) can't answer
     await rs.openTile(code, 2, 0);
-    const zoe = await rs.joinRoom(code, "Zoe");
     room = await read(code);
     const tile3 = rs.activeTileOf(room)!;
-    await rs.answer(code, zoe.id, tile3.answer);
+    await rs.answer(code, fay.id, tile3.answer);
     room = await read(code);
     check(room.answers.length === 0, "a player without a team can't answer");
     await rs.closeTile(code);
@@ -328,13 +337,18 @@ try {
         room.teams.length === 2 && !room.teams.some((t) => t.id === beta) && scores(room) === "400,0",
         `beta vanished when its last member left; other scores kept (${scores(room)})`
     );
-    for (const p of [ana, dan, eve, cam]) await rs.leaveRoom(code, p.id);
+    for (const p of [ana, dan, eve]) await rs.leaveRoom(code, p.id);
     room = await read(code);
     check(room.status === "board" && room.teams.length === 1, "the game continues while one team still has players");
-    await rs.leaveRoom(code, fay.id);
+    const rejoin = await rs.joinRoom(code, "Ana").then(
+        () => "joined",
+        (e) => (e instanceof Error ? e.message : String(e))
+    );
+    check(rejoin === rs.GAME_IN_PROGRESS, "a player who left can't come back mid-game");
+    await rs.leaveRoom(code, cam.id);
     room = await read(code);
     check(
-        room.status === "end" && room.teams.length === 0 && room.players[zoe.id] !== undefined,
+        room.status === "end" && room.teams.length === 0 && room.players[fay.id] !== undefined,
         "all teams gone -> game over (a teamless player doesn't keep it alive)"
     );
 
@@ -387,14 +401,36 @@ try {
     await rs.showOptions(code2);
     await rs.answer(code2, p1.id, rs.activeTileOf(room)!.answer);
     await rs.revealAnswer(code2);
+    await rs.closeTile(code2);
+    await rs.endGame(code2);
+    // Podium: still no joining and no switching teams
+    room = await read(code2);
+    const podiumJoin = await rs.joinRoom(code2, "Tom").then(
+        () => "joined",
+        (e) => (e instanceof Error ? e.message : String(e))
+    );
+    await rs.chooseTeam(code2, p2.id, t1);
+    room = await read(code2);
+    check(room.status === "end" && podiumJoin === rs.GAME_IN_PROGRESS, "joining on the podium is rejected");
+    check(room.players[p2.id]?.team === t2, "switching teams on the podium is ignored");
     await rs.newGame(code2);
     room = await read(code2);
     check(room.status === "setup" && room.board.length === 0 && room.activeTile === null, "newGame goes back to setup with no board");
     check(room.teams.length === 2 && room.teams.every((t) => t.score === 0), "newGame keeps the teams that played, scores reset");
     check(room.players[p1.id]?.team === t1 && room.players[p2.id]?.team === t2, "newGame keeps the players on their teams");
+    await rs.chooseTeam(code2, p2.id, t1);
+    room = await read(code2);
+    check(room.players[p2.id]?.team === t2, "switching teams during setup is ignored (teams open with the room)");
     await rs.openRoom(code2);
     room = await read(code2);
     check(room.status === "lobby" && rs.startProblem(room) === null, "after newGame the room reopens ready to start");
+    // The next game's waiting room is "the beginning" again: joins and switches reopen
+    const p3 = await rs.joinRoom(code2, "Tom");
+    await rs.chooseTeam(code2, p2.id, t1);
+    room = await read(code2);
+    check(room.players[p3.id] !== undefined && room.players[p2.id]?.team === t1, "the next game's lobby lets new players join and players switch teams");
+    await rs.chooseTeam(code2, p2.id, t2);
+    await rs.leaveRoom(code2, p3.id);
 
     // rev: +1 per real write, none for a no-op; own writes reach this tab right away
     const seen: string[] = [];
@@ -437,6 +473,208 @@ try {
 } finally {
     await rs.deleteRoom(code2);
     console.log(`Room ${code2} deleted`);
+}
+
+// ----- 5. Extras: optional game modes ------------------------------------------
+// ⚡ first correct +50% · 🔥 3 in a row → correct worth ×2 · 💀 wrong = −half, floor 0 ·
+// 🚀 strictly-last team +25%. Needs the latest firestore.rules (the `extras` key).
+
+const code3 = await rs.createRoom();
+console.log(`Room ${code3} created`);
+try {
+    let room = await read(code3);
+    check(rs.activeExtras(room).length === 0, "a fresh room has no extras (classic game)");
+    await rs.applySettings(code3, {
+        topic: "java",
+        readSeconds: 0,
+        extras: { speedBonus: true, streak: true, penalty: true, comeback: true, powerUps: true, leaderTax: true, bogus: 1 } as rs.Extras,
+    });
+    room = await read(code3);
+    check(rs.activeExtras(room).length === 6 && !("bogus" in rs.extrasOf(room)), "applySettings turns the extras on and drops unknown keys");
+
+    await rs.openRoom(code3);
+    const ana = await rs.joinRoom(code3, "Ana");
+    const ben = await rs.joinRoom(code3, "Ben");
+    const cam = await rs.joinRoom(code3, "Cam");
+    room = await read(code3);
+    const [ta, tb, tc] = room.teams.map((t) => t.id);
+    await rs.chooseTeam(code3, ana.id, ta);
+    await rs.chooseTeam(code3, ben.id, tb);
+    await rs.chooseTeam(code3, cam.id, tc);
+    await rs.startGame(code3);
+    room = await read(code3);
+    check(rs.activeExtras(room).length === 6, "startGame keeps the extras");
+
+    const teamScore = (r: rs.Room, id: string) => r.teams.find((t) => t.id === id)!.score;
+    const teamAnswer = (r: rs.Room, id: string) => r.answers.find((a) => a.team === id);
+
+    // Q1: Ana first correct (⚡), Ben correct, Cam wrong at 0 points (💀 floors at 0)
+    await rs.openTile(code3, 0, 1);
+    room = await read(code3);
+    const t1 = rs.activeTileOf(room)!;
+    await rs.answer(code3, ana.id, t1.answer);
+    await rs.answer(code3, ben.id, t1.answer);
+    await rs.answer(code3, cam.id, t1.options.find((o) => o !== t1.answer)!);
+    await rs.revealAnswer(code3);
+    room = await read(code3);
+    const fast1 = Math.round(t1.value / 2);
+    check(teamScore(room, ta) === t1.value + fast1, `⚡ the first correct team gets +50% (${t1.value} + ${fast1})`);
+    check(teamScore(room, tb) === t1.value, "the second correct team gets the plain value");
+    check(teamScore(room, tc) === 0 && teamAnswer(room, tc)?.gained === 0, "💀 a wrong answer at 0 points stays at 0 (floor)");
+    check(teamAnswer(room, ta)?.bonuses?.some((b) => b.includes("⚡")) === true, "the speed bonus is stamped on the answer");
+    await rs.closeTile(code3);
+
+    // Q2: Cam (strictly last at 0) first correct → ⚡ and 🚀 (+50% for the last) stack;
+    // Ana (the leader) pays the 👑 tax; Ben wrong → 💀 −half
+    await rs.openTile(code3, 0, 2);
+    room = await read(code3);
+    const t2 = rs.activeTileOf(room)!;
+    await rs.answer(code3, cam.id, t2.answer);
+    await rs.answer(code3, ana.id, t2.answer);
+    await rs.answer(code3, ben.id, t2.options.find((o) => o !== t2.answer)!);
+    await rs.revealAnswer(code3);
+    room = await read(code3);
+    const cGain = t2.value + Math.round(t2.value / 2) + Math.round(t2.value / 2);
+    const bScore = t1.value - Math.floor(t2.value / 2);
+    check(teamScore(room, tc) === cGain && teamAnswer(room, tc)?.bonuses?.some((b) => b.includes("🚀")) === true, `🚀 the strictly-last team adds +50% on top (+${cGain})`);
+    check(teamScore(room, tb) === bScore && teamAnswer(room, tb)?.gained === -Math.floor(t2.value / 2), `💀 a wrong answer costs half the value (${bScore})`);
+    check(teamAnswer(room, ta)?.gained === t2.value - Math.round(t2.value / 5) && teamAnswer(room, ta)?.bonuses?.some((b) => b.includes("👑")) === true, "👑 the leader keeps 80% of its gain");
+    await rs.closeTile(code3);
+
+    // Q3: only Ana answers (correct, streak 3); staying silent costs nothing even with 💀 on
+    await rs.openTile(code3, 0, 0);
+    room = await read(code3);
+    const t3 = rs.activeTileOf(room)!;
+    await rs.answer(code3, ana.id, t3.answer);
+    await rs.revealAnswer(code3);
+    room = await read(code3);
+    check(room.teams.find((t) => t.id === ta)!.streak === 3, "three correct in a row set the streak to 3");
+    check(teamScore(room, tb) === bScore && teamScore(room, tc) === cGain, "not answering never costs points");
+    check(room.teams.find((t) => t.id === tc)!.streak === 0, "a missed question breaks the streak");
+    await rs.closeTile(code3);
+
+    // Q4: Ana is on fire → value ×2, speed bonus on top (and the 👑 tax if she leads).
+    // Ben ends far behind → 🆘 rescue.
+    await rs.openTile(code3, 0, 3);
+    room = await read(code3);
+    const t4 = rs.activeTileOf(room)!;
+    const anaLeads = rs.placeOf(room, room.teams.find((t) => t.id === ta)!) === "leader";
+    await rs.answer(code3, ana.id, t4.answer);
+    await rs.revealAnswer(code3);
+    room = await read(code3);
+    const aAns = teamAnswer(room, ta);
+    const fire4 = t4.value * 2 + Math.round(t4.value / 2);
+    check(aAns?.gained === fire4 - (anaLeads ? Math.round(fire4 / 5) : 0), `🔥 on fire doubles the value before the bonuses (+${aAns?.gained})`);
+    check(aAns?.bonuses?.some((b) => b.includes("🔥")) === true, "the streak label is stamped on the answer");
+    const benRescued = room.teams.find((t) => t.id === tb)!;
+    const gap4 = Math.max(...room.teams.map((t) => t.score)) - benRescued.score;
+    check(gap4 >= rs.rescueGapOf(room) && rs.rescuedNow(room, benRescued), `🆘 a team ${gap4} behind (≥ ${rs.rescueGapOf(room)}) gets the rescue`);
+    await rs.closeTile(code3);
+    room = await read(code3);
+    check(rs.playedCountOf(room) === 4, `closed questions drive the power-up recharge clock (${rs.playedCountOf(room)})`);
+    check(!rs.rescuedNow(room, room.teams.find((t) => t.id === tb)!), "the 🆘 notice ends with its question");
+    const aBefore = teamScore(room, ta);
+    const bBefore = teamScore(room, tb);
+    const cBefore = teamScore(room, tc);
+    const order5 = rankTeams(room.teams).map((r) => r.team.id);
+    check(order5.join() === [ta, tc, tb].join(), "places before Q5: Ana leads, Cam middle, Ben last");
+
+    // Q5 (🃏, reading time on): Ben arms ✖2, a second power from his team is rejected; the
+    // leader can't aim at anyone, nobody can aim at a team behind; Cam steals from Ana.
+    // After showOptions nothing can be armed.
+    await rs.setReadSeconds(code3, 10);
+    await rs.openTile(code3, 1, 0);
+    room = await read(code3);
+    const t5 = rs.activeTileOf(room)!;
+    await rs.activatePower(code3, ben.id, "double");
+    await rs.activatePower(code3, ben.id, "shield"); // one power per team per question
+    await rs.activatePower(code3, ana.id, "steal", tc); // the leader has nobody ahead
+    await rs.activatePower(code3, cam.id, "steal", tb); // Ben is behind Cam
+    await rs.activatePower(code3, cam.id, "steal"); // no target
+    room = await read(code3);
+    check(room.effects?.length === 1, "🏴‍☠️ needs a target ahead of the team (leader, behind and missing targets rejected)");
+    await rs.activatePower(code3, cam.id, "steal", ta);
+    room = await read(code3);
+    check(room.effects?.length === 2 && rs.effectOf(room, tb)?.power === "double" && rs.effectOf(room, tc)?.target === ta, "one power per team per question; 🏴‍☠️ aims at the picked team");
+    await rs.showOptions(code3);
+    await rs.activatePower(code3, ana.id, "shield"); // too late: the options are out
+    room = await read(code3);
+    check(room.effects?.length === 2, "power-ups can only be armed during the reading time");
+    await rs.answer(code3, ben.id, t5.answer);
+    await rs.answer(code3, ana.id, t5.answer);
+    await rs.answer(code3, cam.id, t5.answer);
+    await rs.revealAnswer(code3);
+    room = await read(code3);
+    // Ben: value ×2 (✖2), first correct ⚡ +half, strictly last 🚀 +half
+    const bGain = t5.value * 2 + Math.round(t5.value / 2) + Math.round(t5.value / 2);
+    check(teamScore(room, tb) === bBefore + bGain && teamAnswer(room, tb)?.bonuses?.some((b) => b.includes("✖2")) === true, `✖2 doubles the value and stacks with ⚡ and 🚀 (+${bGain})`);
+    // Cam (middle): value + half the value stolen from Ana
+    const stolen = Math.floor(t5.value / 2);
+    check(teamScore(room, tc) === cBefore + t5.value + stolen && teamAnswer(room, tc)?.bonuses?.some((b) => b.includes("🏴‍☠️")) === true, `🏴‍☠️ steals half the value from the picked team (+${stolen})`);
+    // Ana: 🔥 ×2, 👑 −20%, robbed — all folded into one gained
+    const aGain = t5.value * 2 - Math.round((t5.value * 2) / 5) - stolen;
+    check(teamScore(room, ta) === aBefore + aGain && teamAnswer(room, ta)?.gained === aGain, `the robbed team's loss shows in its gained (${aGain})`);
+    check(room.teams.find((t) => t.id === tb)?.powers?.double === 4, "a spent power is stamped with the question it was used on (no second 🆘)");
+    await rs.closeTile(code3);
+    const aScore6 = aBefore + aGain;
+    // Recharge by place (playedCount 5): Ben (last, ✖2 used at 4) needs 1 more, Cam (middle, 🏴‍☠️ used at 4) 2 more
+    room = await read(code3);
+    check(
+        rs.powerReadyIn(room, room.teams.find((t) => t.id === tb)!, "double") === 1 && rs.powerReadyIn(room, room.teams.find((t) => t.id === tc)!, "steal") === 2,
+        "used powers recharge by place: last in 2 questions, middle in 3"
+    );
+
+    // Q6: Cam's 🧊 halves Ana's gain; Ana's 🎯 strikes 2 wrong options; Ben's 🛡️ cancels 💀
+    await rs.openTile(code3, 1, 1);
+    room = await read(code3);
+    const t6 = rs.activeTileOf(room)!;
+    const benScore6 = teamScore(room, tb);
+    await rs.activatePower(code3, cam.id, "freeze", ta);
+    await rs.activatePower(code3, ana.id, "fifty");
+    await rs.activatePower(code3, ben.id, "shield");
+    room = await read(code3);
+    const fifty = rs.effectOf(room, ta);
+    check(fifty?.removed?.length === 2 && fifty.removed.every((o) => o !== t6.answer && t6.options.includes(o)), "🎯 strikes exactly 2 wrong options, picked server-side for the whole team");
+    await rs.showOptions(code3);
+    await rs.answer(code3, ana.id, t6.answer);
+    await rs.answer(code3, ben.id, t6.options.find((o) => o !== t6.answer)!);
+    await rs.revealAnswer(code3);
+    room = await read(code3);
+    const fire6 = t6.value * 2 + Math.round(t6.value / 2); // 🔥 ×2 + ⚡ (Ana answered first)
+    const taxed6 = fire6 - Math.round(fire6 / 5);
+    const aGain6 = taxed6 - Math.floor(taxed6 / 2);
+    check(teamScore(room, ta) === aScore6 + aGain6 && teamAnswer(room, ta)?.bonuses?.some((b) => b.includes("🧊")) === true, `🧊 halves the frozen team's gain (+${aGain6})`);
+    check(teamScore(room, tb) === benScore6 && teamAnswer(room, tb)?.gained === 0 && teamAnswer(room, tb)?.bonuses?.some((b) => b === "🛡️") === true, "🛡️ cancels the wrong-answer penalty");
+    // Cam fell RESCUE_GAP behind now: 🆘 brings its 🏴‍☠️ back early (only if the gap says so)
+    const camGap = Math.max(...room.teams.map((t) => t.score)) - teamScore(room, tc);
+    const camRescued = camGap >= rs.rescueGapOf(room);
+    check(rs.rescuedNow(room, room.teams.find((t) => t.id === tc)!) === camRescued, `🆘 follows the gap after each question (Cam ${camGap} behind → ${camRescued ? "rescued" : "not yet"})`);
+    await rs.closeTile(code3);
+
+    room = await read(code3);
+    const benTeam = room.teams.find((t) => t.id === tb)!;
+    const camTeam = room.teams.find((t) => t.id === tc)!;
+    check(rs.playedCountOf(room) === 6 && rs.powerReadyIn(room, benTeam, "double") === 0, "the last team's power recharges after 2 questions");
+    check(rs.powerReadyIn(room, camTeam, "steal") === (camRescued ? 0 : 1), "the middle team's 🏴‍☠️ follows its 3-question recharge (or the 🆘)");
+    await rs.openTile(code3, 2, 0);
+    await rs.activatePower(code3, ben.id, "double");
+    room = await read(code3);
+    check(rs.effectOf(room, tb)?.power === "double", "the recharged power can be armed again");
+
+    // Next game in the same room: extras stay, streaks, power-ups and the clock start clean
+    await rs.newGame(code3);
+    room = await read(code3);
+    check(rs.activeExtras(room).length === 6, "newGame keeps the extras for the next game");
+    check(room.teams.every((t) => t.streak === undefined && t.score === 0), "newGame clears scores and streaks");
+    check(
+        rs.playedCountOf(room) === 0 && room.effects?.length === 0 && room.teams.every((t) => t.powers === undefined && t.bestStreak === undefined && t.rescued === undefined),
+        "newGame resets the power-ups and the recharge clock"
+    );
+} catch (error) {
+    check(false, `extras round crashed (are the latest Firestore rules deployed?): ${error}`);
+} finally {
+    await rs.deleteRoom(code3);
+    console.log(`Room ${code3} deleted`);
 }
 
 console.log(failures === 0 ? "\nAll checks passed" : `\n${failures} check(s) failed`);

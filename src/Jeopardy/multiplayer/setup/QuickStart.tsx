@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import { TOPICS } from "../../topics";
+import { EXTRA_INFO, EXTRA_KEYS } from "../roomService";
 import type { LastSetup } from "../setupPrefs";
 import { ring } from "./anim";
 
@@ -14,6 +15,7 @@ type Props = {
 // "⚡ Same as last time" shortcut: one click to reuse the previous setup on this device
 export default function QuickStart({ last, keepTeams, busy, onOpenNow, onNewTopic }: Props) {
     const topic = last.topicName ?? TOPICS.find((t) => t.id === last.topic)?.name;
+    const extras = EXTRA_KEYS.filter((k) => last.extras?.[k] === true).map((k) => EXTRA_INFO[k].icon);
     const bolt = useRef<HTMLSpanElement>(null);
 
     // Soft ring around the ⚡ to draw the eye (repeats a few times, then rests)
@@ -37,6 +39,7 @@ export default function QuickStart({ last, keepTeams, busy, onOpenNow, onNewTopi
                     {topic && " · "}
                     read {last.readSeconds} s · answer {last.timerSeconds} s ·{" "}
                     {keepTeams ? "teams kept" : `${last.students} students → ${last.teamCount} teams of up to ${last.maxTeamSize}`}
+                    {extras.length > 0 && ` · ${extras.join(" ")}`}
                 </p>
             </div>
             <div className="flex flex-wrap gap-2">

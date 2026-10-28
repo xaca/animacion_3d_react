@@ -5,10 +5,11 @@ import { MOTION } from "./panelMode";
 import { asTopicInfo, useCustomTopics } from "./customTopics";
 import { toggleRoomDebug } from "./debugSwitch";
 import ProfileMenu, { type MenuItem } from "./ProfileMenu";
-import { applySettings, cleanRooms, listOldRooms, openRoom, topicLabel, type Room } from "./roomService";
+import { activeExtras, applySettings, cleanRooms, EXTRA_INFO, extrasOf, listOldRooms, openRoom, topicLabel, type Room } from "./roomService";
 import { loadLastSetup, saveLastSetup, type LastSetup } from "./setupPrefs";
 import { pulse, staggerIn } from "./setup/anim";
 import CategoryStep from "./setup/CategoryStep";
+import ExtrasStep from "./setup/ExtrasStep";
 import GameStep from "./setup/GameStep";
 import QuickStart from "./setup/QuickStart";
 import TeamsStep from "./setup/TeamsStep";
@@ -25,7 +26,7 @@ type Props = {
     onNewRoom: () => void; // replaces this room with a fresh one (players are dropped)
 };
 
-const STEPS = ["Category", "Topic", "Game", "Teams"];
+const STEPS = ["Category", "Topic", "Game", "Extras", "Teams"];
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
 
 // Host-only configuration as four free steps (tabs). The code is hidden on purpose:
@@ -84,6 +85,7 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
                 maxTeamSize: room.maxTeamSize,
                 boardSize: room.boardSize ?? 5,
                 gameMinutes: room.gameMinutes ?? 0,
+                extras: extrasOf(room),
                 students,
                 perTeam,
             });
@@ -97,6 +99,7 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
         startSeconds: s.startSeconds,
         boardSize: s.boardSize,
         gameMinutes: s.gameMinutes,
+        extras: s.extras,
         ...(players.length > 0 ? {} : { teamCount: s.teamCount, maxTeamSize: s.maxTeamSize }),
     });
     const quickOpen = (s: LastSetup) =>
@@ -187,6 +190,7 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
                             text={`${room.boardSize ?? 5}×${room.boardSize ?? 5}${(room.gameMinutes ?? 0) > 0 ? ` · ${room.gameMinutes} min` : ""}`}
                         />
                         <Summary text={`${room.teams.length} teams × ${room.maxTeamSize}`} />
+                        {activeExtras(room).length > 0 && <Summary text={activeExtras(room).map((k) => EXTRA_INFO[k].icon).join(" ")} />}
                         {step < STEPS.length - 1 && (
                             <button
                                 type="button"
@@ -241,7 +245,8 @@ export default function HostSetup({ room, onExit, onLogout, onNewRoom }: Props) 
                 )}
                 {step === 1 && <TopicStep room={room} group={group} topics={allTopics} onChangeGroup={() => goTo(0)} />}
                 {step === 2 && <GameStep room={room} />}
-                {step === 3 && <TeamsStep room={room} students={students} perTeam={perTeam} onCalc={calc} />}
+                {step === 3 && <ExtrasStep room={room} />}
+                {step === 4 && <TeamsStep room={room} students={students} perTeam={perTeam} onCalc={calc} />}
             </div>
 
             <footer className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-t border-white/10">

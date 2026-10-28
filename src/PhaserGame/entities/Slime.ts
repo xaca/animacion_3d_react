@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Player } from './Player';
+import type { Enemy } from './Enemy';
 
 const WANDER_SPEED = 30;
 const CHASE_SPEED = 55;
@@ -10,7 +11,8 @@ const KNOCKBACK = 260;
 
 type Mode = 'wander' | 'chase' | 'hurt' | 'dead';
 
-export class Slime extends Phaser.Physics.Arcade.Sprite {
+export class Slime extends Phaser.Physics.Arcade.Sprite implements Enemy {
+  readonly contactDamage = 1;
   private hp = MAX_HP;
   private mode: Mode = 'wander';
   private nextThinkAt = 0;

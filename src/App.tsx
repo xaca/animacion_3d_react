@@ -1,4 +1,7 @@
+//import Gallery from "./Gallery/Gallery.tsx";
+//import Home from "./Home/Home.tsx";
 import Jeopardy from "./Jeopardy/Jeopardy.tsx";
+//import PhaserGame from "./PhaserGame/PhaserGame.tsx";
 import TingoTango from "./TingoTango/TingoTango.tsx";
 
 // Two independent games in one deploy: /tingo/* is TingoTango, everything else is

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import HowToPlay from "./HowToPlay";
-import { joinRoom, ROOM_NOT_OPEN } from "./roomService";
+import { GAME_IN_PROGRESS, joinRoom, ROOM_NOT_OPEN } from "./roomService";
 import { input, linkButton, primaryButton, Screen } from "./ui";
 
 type Props = {
@@ -24,8 +24,14 @@ export default function JoinScreen({ initialCode = "", onJoined, onBack }: Props
             const player = await joinRoom(roomCode, name.trim());
             onJoined(roomCode, player.id);
         } catch (err) {
-            const notOpen = err instanceof Error && err.message === ROOM_NOT_OPEN;
-            setError(notOpen ? "The host hasn't opened the room yet. Wait for the code on the big screen." : "Room not found. Check the code on the big screen.");
+            const message = err instanceof Error ? err.message : "";
+            setError(
+                message === ROOM_NOT_OPEN
+                    ? "The host hasn't opened the room yet. Wait for the code on the big screen."
+                    : message === GAME_IN_PROGRESS
+                      ? "This game already started. Wait for the teacher to open the next game, then join."
+                      : "Room not found. Check the code on the big screen."
+            );
             setBusy(false);
         }
     }

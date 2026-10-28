@@ -2,7 +2,7 @@ import gsap from "gsap";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { rankTeams, type Team } from "../teams";
 import { MOTION, PANEL_WIDTH, type PanelMode } from "./panelMode";
-import { activeTileOf, answerOf, type Room } from "./roomService";
+import { activeTileOf, answerOf, extrasOf, STREAK_FIRE, type Room } from "./roomService";
 
 type Props = {
     room: Room;
@@ -153,12 +153,26 @@ function TeamList({ room, variant }: { room: Room; variant: "expanded" | "rail" 
 
     // No scrolling: from 6 teams up the rows get compact instead, so 10 still fit
     const compact = variant === "expanded" && ranked.length >= 6;
+    const fire = extrasOf(room).streak === true;
     return (
         <ol className={variant === "expanded" ? "flex flex-col gap-2" : "flex flex-col items-center gap-3"}>
             {ranked.map(({ team, place }) => {
                 const answer = tile ? answerOf(room, team.id) : null;
                 const scored = tile !== null && room.revealed && answer?.correct === true;
-                const mark = !tile ? null : !room.revealed ? (answer ? "✔" : null) : scored ? `+${tile.value}` : answer ? "✘" : "—";
+                // The real applied delta (extras included): "+600", "✘" or a 💀 loss like "-200"
+                const mark = !tile
+                    ? null
+                    : !room.revealed
+                      ? answer
+                          ? "✔"
+                          : null
+                      : scored
+                        ? `+${answer?.gained ?? tile.value}`
+                        : answer
+                          ? (answer.gained ?? 0) < 0
+                              ? String(answer.gained)
+                              : "✘"
+                          : "—";
                 return (
                     <TeamRow
                         key={team.id}
@@ -174,6 +188,7 @@ function TeamList({ room, variant }: { room: Room; variant: "expanded" | "rail" 
                         mark={mark}
                         scored={scored}
                         answered={tile !== null && answer !== null}
+                        onFire={fire && (team.streak ?? 0) >= STREAK_FIRE}
                     />
                 );
             })}
@@ -191,9 +206,10 @@ type RowProps = {
     mark: string | null;
     scored: boolean;
     answered: boolean;
+    onFire: boolean; // 🔥 extra: 3+ correct in a row, correct answers worth double
 };
 
-function TeamRow({ rowRef, team, place, variant, compact, members, mark, scored, answered }: RowProps) {
+function TeamRow({ rowRef, team, place, variant, compact, members, mark, scored, answered, onFire }: RowProps) {
     const scoreEl = useRef<HTMLSpanElement>(null);
     const badgeEl = useRef<HTMLSpanElement>(null);
     const ringEl = useRef<HTMLSpanElement>(null);
@@ -256,6 +272,7 @@ function TeamRow({ rowRef, team, place, variant, compact, members, mark, scored,
         return (
             <li ref={rowRef} className="sb-fade group relative flex flex-col items-center gap-0.5">
                 <span className="text-xs opacity-70">{place}</span>
+                {onFire && <span className="absolute -top-1 -left-2 text-xs">🔥</span>}
                 {avatar}
                 <span ref={scoreEl} className={`text-sm font-bold ${scored ? "text-yellow-300" : ""}`} />
                 {mark && <span className="absolute -top-1 -right-2 text-xs">{mark === "✔" ? "✔" : ""}</span>}
@@ -274,8 +291,9 @@ function TeamRow({ rowRef, team, place, variant, compact, members, mark, scored,
             <span className="w-4 text-sm opacity-70 text-right">{place}</span>
             {avatar}
             <span className="min-w-0 flex-1">
-                <span className="block font-bold truncate" title={team.name}>
+                <span className="block font-bold truncate" title={onFire ? `${team.name} — on fire! Correct answers worth double` : team.name}>
                     {team.name}
+                    {onFire && " 🔥"}
                 </span>
                 {/* Student names stay visible even in compact rows (the teacher asked for them) */}
                 {members.length > 0 && (

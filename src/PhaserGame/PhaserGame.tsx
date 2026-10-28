@@ -36,7 +36,7 @@ const PhaserGame = () => {
         <div ref={gameRef} />
       </div>
       <p style={{ fontFamily: 'monospace', color: '#5a8a3c', fontSize: '12px', marginTop: '12px', opacity: 0.7 }}>
-        WASD / Flechas para moverte · Espacio para atacar · Corta arbustos y derrota slimes
+        WASD / Flechas para moverte · Espacio para atacar · Corta arbustos y derrota slimes y moblins · G para debug
       </p>
     </div>
   );

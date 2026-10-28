@@ -12,6 +12,8 @@ import {
     closeTile,
     isLastTile,
     optionsVisible,
+    POWER_INFO,
+    rescuedNow,
     revealAnswer,
     showOptions,
     tilesLeft,
@@ -42,6 +44,10 @@ export default function HostQuestionView({ room, code }: { room: Room; code: str
     const left = tilesLeft(room) - 1; // after this one
     const { answered, total } = answerProgress(room);
     const winners = room.teams.filter((t) => room.answers.some((a) => a.team === t.id && a.correct));
+    // Answers whose points were touched by an extra: bonus labels or a 💀 loss
+    const tagged = room.answers.filter((a) => (a.bonuses?.length ?? 0) > 0 || (a.gained ?? 0) < 0);
+    const rescued = room.teams.filter((t) => rescuedNow(room, t));
+    const teamName = (id: string | null) => room.teams.find((t) => t.id === id)?.name ?? "";
     useBots(room);
     useServerCheck(code, !reading && !revealed, ANSWERS_CHECK_MS, ANSWERS_CHECK_MS);
 
@@ -166,16 +172,47 @@ export default function HostQuestionView({ room, code }: { room: Room; code: str
             )}
 
             <footer className="shrink-0 min-h-16 flex items-end justify-between gap-4">
-                {reading ? (
-                    <p className="text-xl opacity-80">Everyone reads first — no answers yet.</p>
-                ) : !revealed ? (
-                    <p className="text-2xl font-bold">
-                        {answered}/{total} teams answered
-                    </p>
+                {!revealed ? (
+                    <div className="min-w-0 text-left">
+                        {reading ? (
+                            <p className="text-xl opacity-80">Everyone reads first — no answers yet.</p>
+                        ) : (
+                            <p className="text-2xl font-bold">
+                                {answered}/{total} teams answered
+                            </p>
+                        )}
+                        {(room.effects ?? []).length > 0 && (
+                            <p className="flex flex-wrap gap-2 mt-1">
+                                {(room.effects ?? []).map((e) => (
+                                    <span key={e.team} className="bg-white/10 rounded px-2 py-0.5 text-sm font-bold">
+                                        {teamName(e.team)} {POWER_INFO[e.power].icon} {POWER_INFO[e.power].name}
+                                        {e.target && ` → ${teamName(e.target)}`}
+                                    </span>
+                                ))}
+                            </p>
+                        )}
+                    </div>
                 ) : (
-                    <p className="text-2xl md:text-3xl font-bold text-yellow-300">
-                        {winners.length === 0 ? "Nobody got it!" : `Correct: ${winners.map((t) => t.name).join(", ")}`}
-                    </p>
+                    <div className="min-w-0 text-left">
+                        <p className="text-2xl md:text-3xl font-bold text-yellow-300">
+                            {winners.length === 0 ? "Nobody got it!" : `Correct: ${winners.map((t) => t.name).join(", ")}`}
+                        </p>
+                        {tagged.length + rescued.length > 0 && (
+                            <p className="flex flex-wrap gap-2 mt-1">
+                                {tagged.map((a) => (
+                                    <span key={a.playerId} className="bg-white/10 rounded px-2 py-0.5 text-sm font-bold">
+                                        {teamName(a.team)} {a.bonuses?.join(" · ")}
+                                        {(a.gained ?? 0) < 0 && ` = ${a.gained}`}
+                                    </span>
+                                ))}
+                                {rescued.map((t) => (
+                                    <span key={t.id} className="bg-yellow-300 text-black rounded px-2 py-0.5 text-sm font-bold">
+                                        🆘 {t.name}: power-ups recharged
+                                    </span>
+                                ))}
+                            </p>
+                        )}
+                    </div>
                 )}
                 {revealed ? (
                     <div ref={btnBox} className="flex flex-col items-end gap-1 opacity-0">

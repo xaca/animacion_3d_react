@@ -11,6 +11,7 @@ export function generateTextures(scene: Phaser.Scene) {
   generateTileTextures(g);
   generatePlayerSheet(g);
   generateSword(g);
+  generateMoblinTextures(g);
   generateObjectTextures(g);
   g.destroy();
 }
@@ -189,6 +190,95 @@ function generateSword(g: Phaser.GameObjects.Graphics) {
   g.fillStyle(GUARD);      g.fillRect(0, 12, 5, 2);
   g.fillStyle(HILT);       g.fillRect(1, 14, 3, 4);
   g.generateTexture('sword', 5, 18);
+}
+
+// ─── Moblin ──────────────────────────────────────────────────────────────────
+// 16×20 frames drawn facing right (the sprite flips for left), plus its fireball and "!" mark.
+
+type MoblinPose = {
+  dx: number;                 // whole-body lean
+  legL: number; legR: number; // leg lift
+  arms: 'down' | 'back' | 'forward' | 'up';
+  mouth: 'closed' | 'open';
+};
+
+const MOB_SKIN = 0xb5482a, MOB_BELLY = 0xd9774a, MOB_SNOUT = 0xe89a7a, MOB_DARK = 0x5a1e12;
+const MOB_HORN = 0xe8e0c8, MOB_EYE = 0xffe040, FIRE_HOT = 0xfff0a0, FIRE_MID = 0xffa020, FIRE_OUT = 0xd03010;
+
+function generateMoblinTextures(g: Phaser.GameObjects.Graphics) {
+  const base: MoblinPose = { dx: 0, legL: 0, legR: 0, arms: 'down', mouth: 'closed' };
+  const poses: Record<string, MoblinPose> = {
+    moblin_walk0:  { ...base, legL: 2 },
+    moblin_walk1:  { ...base, legR: 2 },
+    moblin_windup: { ...base, dx: -1, arms: 'back' },
+    moblin_lunge:  { ...base, dx: 1, arms: 'forward', legL: 1 },
+    moblin_charge: { ...base, mouth: 'open' },
+    moblin_roar:   { ...base, arms: 'up', mouth: 'open' },
+  };
+  Object.entries(poses).forEach(([key, pose]) => {
+    g.clear();
+    drawMoblin(g, pose);
+    g.generateTexture(key, 16, 20);
+  });
+
+  // Fireball: 2 flicker frames, 8×8
+  [0, 1].forEach((frame) => {
+    g.clear();
+    g.fillStyle(FIRE_OUT); g.fillCircle(4, 4, 4 - frame * 0.5);
+    g.fillStyle(FIRE_MID); g.fillCircle(4 + frame * 0.5, 4, 3);
+    g.fillStyle(FIRE_HOT); g.fillCircle(4 + frame * 0.5, 4 - frame * 0.5, 1.5);
+    g.generateTexture(`fireball${frame}`, 8, 8);
+  });
+
+  // Ember particle (tinted by the emitter)
+  g.clear(); g.fillStyle(0xffffff); g.fillRect(0, 0, 2, 2); g.generateTexture('ember', 2, 2);
+
+  // "!" alert mark, 4×9
+  drawPattern(g, ['.##.', '####', '####', '.##.', '.##.', '.##.', '....', '.##.', '.##.'], 0xffe040, 'alert_mark');
+}
+
+function drawMoblin(g: Phaser.GameObjects.Graphics, p: MoblinPose) {
+  // Shadow stays on the ground
+  g.fillStyle(0x000000, 0.25);
+  g.fillEllipse(8, 19, 12, 3);
+
+  const x = p.dx;
+
+  // Legs (the lifted one is shorter)
+  g.fillStyle(MOB_DARK);
+  g.fillRect(x + 5, 15, 2, 4 - p.legL);
+  g.fillRect(x + 9, 15, 2, 4 - p.legR);
+
+  // Arm behind the body when pulled back
+  g.fillStyle(MOB_SKIN);
+  if (p.arms === 'back') g.fillRect(x + 1, 9, 3, 3);
+
+  // Body + belly
+  g.fillStyle(MOB_SKIN);  g.fillRect(x + 3, 8, 10, 8);
+  g.fillStyle(MOB_BELLY); g.fillRect(x + 6, 10, 5, 5);
+
+  // Head, snout, horns, eye
+  g.fillStyle(MOB_SKIN);  g.fillRect(x + 4, 2, 9, 7);
+  g.fillStyle(MOB_SNOUT); g.fillRect(x + 11, 4, 4, 4);
+  g.fillStyle(MOB_DARK);  g.fillRect(x + 13, 5, 1, 1);
+  g.fillStyle(MOB_HORN);  g.fillRect(x + 4, 0, 2, 2); g.fillRect(x + 10, 0, 2, 2);
+  g.fillStyle(MOB_EYE);   g.fillRect(x + 9, 3, 2, 2);
+  g.fillStyle(MOB_DARK);  g.fillRect(x + 10, 4, 1, 1);
+
+  // Mouth: a line when closed, glowing with fire when open
+  if (p.mouth === 'open') {
+    g.fillStyle(MOB_DARK); g.fillRect(x + 11, 7, 4, 3);
+    g.fillStyle(FIRE_MID); g.fillRect(x + 12, 8, 3, 2);
+    g.fillStyle(FIRE_HOT); g.fillRect(x + 13, 8, 2, 1);
+  } else {
+    g.fillStyle(MOB_DARK); g.fillRect(x + 11, 8, 3, 1);
+  }
+
+  // Front arm
+  g.fillStyle(MOB_SKIN);
+  if (p.arms === 'down')         g.fillRect(x + 10, 10, 2, 5);
+  else if (p.arms === 'forward') g.fillRect(x + 12, 10, 4, 2);
+  else if (p.arms === 'up')      { g.fillRect(x + 2, 3, 2, 5); g.fillRect(x + 12, 3, 2, 5); }
 }
 
 // ─── World objects: bush, pickups, HUD, enemies, particles ───────────────────

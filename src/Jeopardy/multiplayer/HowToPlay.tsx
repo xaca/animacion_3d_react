@@ -24,8 +24,8 @@ const STEPS: { icon: string; en: string; es: string }[] = [
     },
     {
         icon: "🎨",
-        en: "Pick a team: tap one of the teams. You can switch while there is space.",
-        es: "Elige equipo: toca uno de los equipos. Puedes cambiarte mientras haya espacio.",
+        en: "Pick a team: tap one of the teams. You can switch while there is space, until the game starts — then teams are fixed.",
+        es: "Elige equipo: toca uno de los equipos. Puedes cambiarte mientras haya espacio, hasta que empiece el juego — después los equipos quedan fijos.",
     },
     {
         icon: "🤫",

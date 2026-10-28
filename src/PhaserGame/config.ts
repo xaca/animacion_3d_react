@@ -6,6 +6,7 @@ export const SAND   = 3;
 export const FLOWER = 4;
 export const BUSH   = 5; // cuttable with the sword
 export const SLIME  = 6; // enemy spawn point (drawn as grass)
+export const MOBLIN = 7; // fire-breathing enemy spawn point (drawn as grass)
 
 export const TILE_SIZE = 32;
 

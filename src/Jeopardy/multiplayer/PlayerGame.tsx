@@ -8,7 +8,8 @@ import Podium from "../Podium";
 import { MOTION } from "./panelMode";
 import { LETTERS } from "../questions";
 import { rankTeams, type Team } from "../teams";
-import { activeTileOf, answer, APP_VERSION, answerOf, answerProgress, chooseTeam, isLastTile, leaveRoom, optionsVisible, topicLabel, type Player, type Room } from "./roomService";
+import PowerBar from "./PowerBar";
+import { activeExtras, activeTileOf, answer, APP_VERSION, answerOf, answerProgress, chooseTeam, effectOf, EXTRA_INFO, extrasOf, isLastTile, leaveRoom, optionsVisible, topicLabel, type Player, type Room } from "./roomService";
 import { linkButton, Message, Screen } from "./ui";
 import { useRoom } from "./useRoom";
 import { useServerCheck } from "./useServerCheck";
@@ -28,7 +29,10 @@ export default function PlayerGame({ code, playerId, onExit }: Props) {
     const player = room.players[playerId];
     if (!player) return <Message text="You are no longer in this room." onBack={onExit} backLabel="Join a game" />;
 
+    // Mid-game, leaving is final for this game: joining is closed until the next one opens
+    const playing = room.status === "board" || room.status === "question";
     async function leave() {
+        if (playing && !confirm("If you leave, you can't come back until the next game. Leave?")) return;
         await leaveRoom(code, playerId);
         onExit();
     }
@@ -48,14 +52,18 @@ export default function PlayerGame({ code, playerId, onExit }: Props) {
 
             {hasTeam && (room.status === "board" || room.status === "question") && <MyScore room={room} teamId={myTeam.id} />}
 
+            {/* Teams are picked (and switched) only in the waiting room; from the start of
+                the game until the next one opens they're fixed */}
             {room.status === "setup" ? (
                 <SetupWait team={myTeam} />
-            ) : !hasTeam || room.status === "lobby" ? (
+            ) : room.status === "lobby" ? (
                 <TeamPicker room={room} player={player} />
-            ) : room.status === "question" && room.activeTile ? (
-                <AnswerPicker key={`${room.activeTile.col}-${room.activeTile.row}`} room={room} player={player} />
             ) : room.status === "end" ? (
                 <PlayerEnd room={room} player={player} />
+            ) : !hasTeam ? (
+                <LateWait />
+            ) : room.status === "question" && room.activeTile ? (
+                <AnswerPicker key={`${room.activeTile.col}-${room.activeTile.row}`} room={room} player={player} />
             ) : (
                 <p className="text-3xl font-bold">Look at the big screen. Waiting for a question…</p>
             )}
@@ -131,6 +139,29 @@ function SetupWait({ team }: { team: Team | undefined }) {
     );
 }
 
+// In the room without a team when the game started (didn't pick in time): teams are fixed
+// until the next game, so this player just waits. Same pop-in card as SetupWait.
+function LateWait() {
+    const root = useRef<HTMLDivElement>(null);
+    useLayoutEffect(() => {
+        const tween = gsap.fromTo(
+            root.current,
+            { scale: 0.6, autoAlpha: 0 },
+            { scale: 1, autoAlpha: 1, duration: 0.45 * MOTION, ease: "back.out(1.7)", clearProps: "transform" }
+        );
+        return () => {
+            tween.kill();
+        };
+    }, []);
+
+    return (
+        <div ref={root} className="flex flex-col items-center gap-4 max-w-md opacity-0">
+            <p className="text-4xl font-bold">⏳ The game already started</p>
+            <p className="text-xl opacity-90">You didn't pick a team in time. Stay here: you'll pick a team when the teacher opens the next game.</p>
+        </div>
+    );
+}
+
 const ordinal = (n: number) => `${n}${n % 10 === 1 && n % 100 !== 11 ? "st" : n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th"}`;
 
 // "Game over!" splash first, then the podium with the player's own place called out
@@ -167,10 +198,14 @@ function MyScore({ room, teamId }: { room: Room; teamId: string }) {
 function TeamPicker({ room, player }: { room: Room; player: Player }) {
     const players = Object.values(room.players);
     const sizeOf = (teamId: string) => players.filter((p) => p.team === teamId).length;
+    const extras = activeExtras(room);
 
     return (
         <>
             <h2 className="text-3xl font-bold">Pick your team</h2>
+            {extras.length > 0 && (
+                <p className="text-lg opacity-90">Game extras: {extras.map((k) => `${EXTRA_INFO[k].icon} ${EXTRA_INFO[k].name}`).join(" · ")}</p>
+            )}
 
             <div className="grid gap-3 w-full max-w-md">
                 {room.teams.map((team) => {
@@ -235,6 +270,9 @@ function AnswerPicker({ room, player }: { room: Room; player: Player }) {
     // Reading time (`reading` above): question only. The host screen reveals the options for everyone at once.
     const { answered, total } = answerProgress(room);
     const topic = topicLabel(room);
+    const extras = activeExtras(room);
+    const myTeam = room.teams.find((t) => t.id === player.team);
+    const myEffect = effectOf(room, player.team);
 
     return (
         <>
@@ -243,6 +281,7 @@ function AnswerPicker({ room, player }: { room: Room; player: Player }) {
             <div className="w-full max-w-md">
                 <p className="text-lg opacity-80">
                     {topic} — {room.board[room.activeTile.col].name} — {tile.value}
+                    {extras.length > 0 && <span className="ml-2">{extras.map((k) => EXTRA_INFO[k].icon).join("")}</span>}
                     {isLastTile(room) && (
                         <span className="ml-2 bg-yellow-300 text-black font-bold text-sm px-2 py-0.5 rounded align-middle">⭐ Final question</span>
                     )}
@@ -265,16 +304,20 @@ function AnswerPicker({ room, player }: { room: Room; player: Player }) {
                 !done && <LocalCountdown key="answer" seconds={room.timerSeconds} />
             )}
 
+            {extrasOf(room).powerUps === true && myTeam && <PowerBar room={room} playerId={player.id} team={myTeam} />}
+
             {!reading && (
                 <div className="grid gap-3 w-full max-w-md">
                     {tile.options.map((option, i) => {
                         const ours = teamAnswer?.choice === option;
                         const isAnswer = done && option === tile.answer;
+                        // 🎯 50/50: the two struck options, same for the whole team (stored in the effect)
+                        const struck = !done && myEffect?.power === "fifty" && (myEffect.removed?.includes(option) ?? false);
                         return (
                             <button
                                 key={option}
                                 onClick={() => answer(room.code, player.id, option)}
-                                disabled={!!teamAnswer || done}
+                                disabled={!!teamAnswer || done || struck}
                                 className={`text-2xl font-bold py-4 px-3 text-left border-4 cursor-pointer disabled:cursor-not-allowed ${
                                     isAnswer
                                         ? "bg-yellow-300 text-black border-black"
@@ -282,7 +325,9 @@ function AnswerPicker({ room, player }: { room: Room; player: Player }) {
                                           ? "bg-red-600 text-white border-black"
                                           : ours
                                             ? "bg-white text-[#2a3698] border-black"
-                                            : `bg-white text-[#2a3698] border-transparent ${teamAnswer || done ? "opacity-50" : "hover:bg-yellow-300"}`
+                                            : struck
+                                              ? "bg-white text-[#2a3698] border-transparent opacity-30 line-through"
+                                              : `bg-white text-[#2a3698] border-transparent ${teamAnswer || done ? "opacity-50" : "hover:bg-yellow-300"}`
                                 }`}
                             >
                                 <span className="mr-3">{LETTERS[i]}</span>
@@ -298,7 +343,12 @@ function AnswerPicker({ room, player }: { room: Room; player: Player }) {
                     {!teamAnswer ? (
                         "Your team didn't answer in time."
                     ) : teamAnswer.correct ? (
-                        <b className="text-yellow-300">Correct! +{tile.value} for your team</b>
+                        <b className="text-yellow-300">
+                            Correct! +{teamAnswer.gained ?? tile.value} for your team
+                            {(teamAnswer.bonuses?.length ?? 0) > 0 && ` (${teamAnswer.bonuses!.join(" · ")})`}
+                        </b>
+                    ) : (teamAnswer.gained ?? 0) < 0 ? (
+                        <b className="text-red-400">Wrong answer: 💀 {teamAnswer.gained} for your team.</b>
                     ) : (
                         "Wrong answer, no points this time."
                     )}
