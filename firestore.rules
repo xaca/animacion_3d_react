@@ -53,11 +53,20 @@ service cloud.firestore {
       }
     }
 
-    // TingoTango question bank, uploaded by scripts/seed-tingo.ts (same 3-step rules
-    // dance as `questions`). The app only reads it.
+    // TingoTango question bank. The seeded content (ids without prefix) is read-only and
+    // uploaded by scripts/seed-tingo.ts with the rules dance. The in-app JSON uploader may
+    // write ONLY `custom-` docs with a strict shape (same checks as Jeopardy's).
     match /tingo_questions/{id} {
       allow read: if true;
-      allow write: if false;
+      allow create, update: if id.matches('^custom-.*') && isCustomQuestion(request.resource.data);
+      allow delete: if id.matches('^custom-.*');
+    }
+
+    // Cards of the teacher-uploaded TingoTango topics (📥 Subir tema JSON)
+    match /tingo_custom_topics/{id} {
+      allow read: if true;
+      allow create, update: if id.matches('^custom-.*') && isTingoCustomTopic(request.resource.data) && request.resource.data.id == id;
+      allow delete: if id.matches('^custom-.*');
     }
 
     // Everything else is closed
@@ -90,11 +99,18 @@ service cloud.firestore {
         && d.isNew is bool && d.createdAt is number;
     }
 
+    function isTingoCustomTopic(d) {
+      return d.keys().hasOnly(['id', 'name', 'tagline', 'createdAt'])
+        && d.id is string && d.name is string && d.name.size() > 0 && d.name.size() <= 60
+        && d.tagline is string && d.tagline.size() <= 120
+        && d.createdAt is number;
+    }
+
     function isTingoRoom(data) {
       return data.keys().hasOnly(['code', 'version', 'createdAt', 'status', 'topic', 'readSeconds', 'answerSeconds',
           'players', 'playedIds', 'round', 'selectedId', 'question', 'queue', 'readEndsAt', 'optionsAt',
-          'questionEndsAt', 'revealed', 'choice', 'hops', 'hopMs', 'questionCount', 'debug', 'rev'])
-        && data.status in ['lobby', 'tingo', 'tango', 'end'];
+          'questionEndsAt', 'revealed', 'choice', 'hops', 'hopMs', 'questionCount', 'debug', 'rev', 'tiebreaks'])
+        && data.status in ['setup', 'lobby', 'tingo', 'tango', 'end'];
     }
   }
 }

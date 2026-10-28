@@ -2,10 +2,12 @@ import gsap from "gsap";
 import { useLayoutEffect, useRef } from "react";
 import { fanfare } from "./sound";
 import { MOTION } from "./motion";
-import { rankPlayers, type TingoPlayer } from "./types";
+import { placeLabel, signLabel } from "./tiebreak";
+import { rankPlayers, type Tiebreak, type TingoPlayer } from "./types";
 
 type Props = {
     players: TingoPlayer[];
+    tiebreaks?: Tiebreak[]; // ✊✋✌️ results: order the tied steps and get recapped below
     withSound?: boolean; // host only: the fanfare plays on the classroom speakers
 };
 
@@ -15,13 +17,17 @@ const CONFETTI = ["#dc2626", "#2563eb", "#16a34a", "#eab308", "#9333ea", "#ec489
 // Card accents, one per player in ranking order (individuals have no team color)
 const ACCENTS = ["#ef4444", "#3b82f6", "#22c55e", "#eab308", "#a855f7", "#ec4899", "#14b8a6", "#f97316", "#64748b", "#84cc16"];
 
-export default function Podium({ players, withSound = false }: Props) {
+export default function Podium({ players, tiebreaks = [], withSound = false }: Props) {
     const root = useRef<HTMLDivElement>(null);
     // Only players who scored get a step (a 🥈 for 0 points reads as a joke); the rest
     // are listed below. Callers skip the podium entirely when NOBODY scored (hasScores).
     const zeros = players.filter((p) => p.score <= 0);
-    const ranked = rankPlayers(players.filter((p) => p.score > 0));
-    // Classic podium order: 2nd, 1st, 3rd. Ties stand on the same step.
+    const ranked = rankPlayers(
+        players.filter((p) => p.score > 0),
+        tiebreaks
+    );
+    const viaTiebreak = new Set(tiebreaks.flatMap((t) => t.contenders.map((c) => c.id)));
+    // Classic podium order: 2nd, 1st, 3rd. Unresolved ties (old rooms) share a step.
     const columns = [2, 1, 3]
         .map((place) => ({ place, entries: ranked.filter((r) => r.place === place) }))
         .filter((c) => c.entries.length > 0);
@@ -81,6 +87,7 @@ export default function Podium({ players, withSound = false }: Props) {
                             >
                                 <p className="font-bold text-xl leading-tight">{player.name}</p>
                                 <p className="text-2xl font-bold text-slate-800">{player.score}</p>
+                                {viaTiebreak.has(player.id) && <p className="text-xs font-bold text-slate-500">✊✋✌️ desempate</p>}
                             </div>
                         ))}
                         <div className={`pd-bar w-full ${HEIGHTS[place]} bg-yellow-300 border-4 border-black flex items-start justify-center`}>
@@ -105,6 +112,21 @@ export default function Podium({ players, withSound = false }: Props) {
                             {place}. {player.name} — {player.score}
                         </li>
                     ))}
+                </ul>
+            )}
+            {tiebreaks.length > 0 && (
+                // Recap of the ✊✋✌️ show (or of what the teacher skipped)
+                <ul className="pd-rest text-base md:text-lg opacity-90 text-center space-y-0.5">
+                    {tiebreaks.map((t) => {
+                        const winner = t.contenders.find((c) => c.id === t.winner);
+                        const sign = t.throws[t.throws.length - 1]?.[t.winner];
+                        return (
+                            <li key={t.place}>
+                                🤝 Empate en el {placeLabel(t.place)} ({t.score} pts): lo ganó <b>{winner?.name}</b>
+                                {sign && <> con {signLabel(sign)}</>} en piedra, papel o tijera
+                            </li>
+                        );
+                    })}
                 </ul>
             )}
             {zeros.length > 0 && (

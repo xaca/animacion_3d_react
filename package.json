@@ -16,6 +16,7 @@
     "seed": "esbuild scripts/seed-questions.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.cache/jeopardy-seed.mjs --log-level=warning && node node_modules/.cache/jeopardy-seed.mjs",
     "seed:tingo": "esbuild scripts/seed-tingo.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.cache/tingo-seed.mjs --log-level=warning && node node_modules/.cache/tingo-seed.mjs",
     "clean:tingo": "esbuild scripts/clean-tingo.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.cache/tingo-clean.mjs --log-level=warning && node node_modules/.cache/tingo-clean.mjs",
+    "test:tingo": "esbuild scripts/tingo-test.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.cache/tingo-test.mjs --log-level=warning && node node_modules/.cache/tingo-test.mjs",
     "test:jeopardy": "esbuild .claude/skills/jeopardy/scripts/round-test.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.cache/jeopardy-round-test.mjs --log-level=warning && node node_modules/.cache/jeopardy-round-test.mjs"
   },
   "dependencies": {

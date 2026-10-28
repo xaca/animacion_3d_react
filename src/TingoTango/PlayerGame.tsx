@@ -6,6 +6,7 @@ import GameOverSplash from "./GameOverSplash";
 import HowToPlay from "./HowToPlay";
 import { MOTION } from "./motion";
 import Podium from "./Podium";
+import TiebreakShow from "./TiebreakShow";
 import { answer, APP_VERSION, hopMsOf, hopsOf, leaveRoom, optionsVisible, selectedPlayer, type TingoRoom } from "./roomService";
 import { hasScores, LETTERS, POINTS, rankPlayers, type TingoPlayer } from "./types";
 import { linkButton, Message, Screen } from "./ui";
@@ -44,9 +45,9 @@ export default function PlayerGame({ code, playerId, onExit }: Props) {
                 <span className="tracking-widest">Sala {room.code}</span>
             </header>
 
-            {room.status !== "lobby" && room.status !== "end" && <MyScore room={room} playerId={playerId} />}
+            {(room.status === "tingo" || room.status === "tango") && <MyScore room={room} playerId={playerId} />}
 
-            {room.status === "lobby" ? (
+            {room.status === "lobby" || room.status === "setup" ? (
                 <LobbyWait room={room} />
             ) : room.status === "tingo" ? (
                 <BallWait key={room.round} room={room} playerId={playerId} />
@@ -102,7 +103,8 @@ function LobbyWait({ room }: { room: TingoRoom }) {
         <div ref={root} className="flex flex-col items-center gap-4 opacity-0">
             <p className="text-4xl font-bold">¡Ya estás dentro! 🎮</p>
             <p className="text-xl opacity-90">
-                Esperando a que el profe empiece
+                {/* setup: the teacher went back to ⚙ Ajustes; the player stays in */}
+                {room.status === "setup" ? "El profe está preparando el juego" : "Esperando a que el profe empiece"}
                 {[0, 1, 2].map((i) => (
                     <span key={i} className="lw-dot inline-block">
                         .
@@ -350,9 +352,13 @@ function TangoView({ room, player }: { room: TingoRoom; player: TingoPlayer }) {
 // time" when I ended on 0, or "la bolita ganó" when NOBODY scored (no medals for zeros)
 function PlayerEnd({ room, player }: { room: TingoRoom; player: TingoPlayer }) {
     const [splashDone, setSplashDone] = useState(false);
+    const [tiebreakDone, setTiebreakDone] = useState(false);
+    const tiebreaks = room.tiebreaks ?? [];
     if (!splashDone) return <GameOverSplash onDone={() => setSplashDone(true)} />;
+    if (tiebreaks.length > 0 && !tiebreakDone) return <TiebreakShow tiebreaks={tiebreaks} onDone={() => setTiebreakDone(true)} />;
     const players = Object.values(room.players);
-    const ranked = rankPlayers(players);
+    const ranked = rankPlayers(players, tiebreaks);
+    const viaTiebreak = tiebreaks.some((t) => t.contenders.some((c) => c.id === player.id));
     const mine = ranked.find((r) => r.player.id === player.id);
 
     if (players.length === 0) {
@@ -379,11 +385,12 @@ function PlayerEnd({ room, player }: { room: TingoRoom; player: TingoPlayer }) {
                 (mine.player.score > 0 ? (
                     <p className="text-2xl font-bold text-yellow-300">
                         Quedaste {ordinal(mine.place)} de {ranked.length} con {mine.player.score} puntos
+                        {viaTiebreak && " (por desempate ✊✋✌️)"}
                     </p>
                 ) : (
                     <p className="text-2xl font-bold text-yellow-300">Esta vez no sumaste puntos. ¡A la próxima! 💪</p>
                 ))}
-            <Podium players={players} />
+            <Podium players={players} tiebreaks={tiebreaks} />
         </>
     );
 }

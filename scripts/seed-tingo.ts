@@ -7,55 +7,19 @@
 import { collection, doc, getDocs, query, terminate, where, writeBatch } from "firebase/firestore";
 import { db } from "../src/lib/firebase";
 import { TINGO_CONTENT } from "../src/TingoTango/content";
+import { slug, validateTopic } from "../src/TingoTango/contentValidation";
 import type { TopicContent } from "../src/TingoTango/content/types";
-
-const CATEGORIES = 5;
-const LEVELS = 5;
-const MIN_PER_LEVEL = 2;
 
 function fail(message: string): never {
     console.error(`[seed:tingo] ${message}`);
     process.exit(1);
 }
 
-const words = (s: string) => s.trim().split(/\s+/).length;
-
-// Players spot it when the correct answer is always the longest (or shortest) option.
-// Flag it only when it's a clear giveaway: more words than every wrong option AND
-// 1.5x the characters of the longest one (or the symmetric case).
-function lengthGiveaway(answer: string, wrong: string[]): string | null {
-    const aw = words(answer);
-    const ac = answer.length;
-    const ww = wrong.map(words);
-    const wc = wrong.map((w) => w.length);
-    if (ww.every((n) => aw > n) && ac > 1.5 * Math.max(...wc)) return "longest";
-    if (ww.every((n) => aw < n) && 1.5 * ac < Math.min(...wc)) return "shortest";
-    return null;
-}
-
-// Full topic shape, 4 distinct options per question, no length giveaways
+// Same validator as the in-app uploader: full 5×5 shape, 4 distinct options, no length giveaways
 function validate(topic: TopicContent) {
-    const names = Object.keys(topic.categories);
-    if (names.length !== CATEGORIES) fail(`${topic.id}: expected ${CATEGORIES} categories, got ${names.length}`);
-    for (const [name, levels] of Object.entries(topic.categories)) {
-        if (levels.length !== LEVELS) fail(`${topic.id} / ${name}: expected ${LEVELS} levels, got ${levels.length}`);
-        levels.forEach((qas, level) => {
-            if (qas.length < MIN_PER_LEVEL) fail(`${topic.id} / ${name} level ${level + 1}: needs at least ${MIN_PER_LEVEL} questions`);
-            for (const qa of qas) {
-                const where_ = `${topic.id} / ${name}: "${qa.question}"`;
-                if (qa.wrong.length !== 3) fail(`${where_} needs exactly 3 wrong options`);
-                const options = [qa.answer, ...qa.wrong].map((o) => o.trim());
-                if (options.some((o) => !o) || !qa.question.trim()) fail(`${where_} has empty text`);
-                if (new Set(options.map((o) => o.toLowerCase())).size !== 4) fail(`${where_} has duplicate options`);
-                const g = lengthGiveaway(qa.answer, qa.wrong);
-                if (g) fail(`${where_}: the correct answer is clearly the ${g} option (balance the lengths)`);
-            }
-        });
-    }
+    const errors = validateTopic(topic, topic.id);
+    if (errors.length > 0) fail(errors[0]);
 }
-
-const slug = (text: string) =>
-    text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 const only = process.argv[2];
 const topics = only ? TINGO_CONTENT.filter((t) => t.id === only) : TINGO_CONTENT;

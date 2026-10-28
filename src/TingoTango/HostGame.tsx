@@ -5,6 +5,7 @@ import { toggleRoomDebug } from "./debugSwitch";
 import EndScreen from "./EndScreen";
 import GameOverSplash from "./GameOverSplash";
 import HostLobby from "./HostLobby";
+import HostSetup from "./HostSetup";
 import { MOTION } from "./motion";
 import ProfileMenu, { type MenuItem } from "./ProfileMenu";
 import {
@@ -13,7 +14,9 @@ import {
     createRoom,
     deleteRoom,
     endGame,
+    forceTie,
     hopMsOf,
+    openRoom,
     questionCountOf,
     selectedPlayer,
     stopTango,
@@ -21,6 +24,7 @@ import {
 } from "./roomService";
 import { isSoundOn, setSoundOn } from "./sound";
 import TangoQuestionView from "./TangoQuestionView";
+import TiebreakShow from "./TiebreakShow";
 import { hasScores, TINGO_MAX_MS, TINGO_MIN_MS, type QuestionSource } from "./types";
 import { dotted, Message } from "./ui";
 import { useRoom } from "./useRoom";
@@ -43,11 +47,16 @@ export default function HostGame({ code, questionSource, basePath, onExit, onLog
 
     // "¡Se acabó!" splash shown once when the game ends; rearmed when the status changes
     // (adjust-state-during-render pattern, see react.dev "You might not need an effect")
+    // Then the ✊✋✌️ show when a podium place was tied (skippable), then the podium
     const [splashDone, setSplashDone] = useState(false);
+    const [tiebreakDone, setTiebreakDone] = useState(false);
     const [prevStatus, setPrevStatus] = useState(status);
     if (status !== prevStatus) {
         setPrevStatus(status);
-        if (status !== "end") setSplashDone(false);
+        if (status !== "end") {
+            setSplashDone(false);
+            setTiebreakDone(false);
+        }
     }
 
     // The ball lands with its own animation AFTER the room already says tango; the
@@ -111,11 +120,13 @@ export default function HostGame({ code, questionSource, basePath, onExit, onLog
         onExit();
     }
 
-    // A fresh room with this room's settings; we move first, then delete, so the host
-    // never sees "room no longer exists". Players of the old room see "room closed".
+    // A fresh room with this room's settings, straight to its lobby (setup was already
+    // done); we move first, then delete, so the host never sees "room no longer exists".
+    // Players of the old room see "room closed".
     async function freshRoom(r: TingoRoom) {
         const next = await createRoom();
         await applySettings(next, { topic: r.topic, readSeconds: r.readSeconds, answerSeconds: r.answerSeconds, questionCount: questionCountOf(r) });
+        await openRoom(next);
         onNewRoom(next);
         await deleteRoom(code).catch((e) => console.error(`Could not delete room ${code}`, e));
     }
@@ -126,6 +137,10 @@ export default function HostGame({ code, questionSource, basePath, onExit, onLog
             alert("No se pudo crear la sala nueva. Revisa la conexión e intenta de nuevo.");
         });
 
+    if (room.status === "setup") {
+        return withDebug(<HostSetup room={room} questionSource={questionSource} onExit={closeRoom} onLogout={onLogout} />);
+    }
+
     if (room.status === "lobby") {
         return withDebug(
             <HostLobby room={room} questionSource={questionSource} basePath={basePath} onExit={closeRoom} onLogout={onLogout} />
@@ -134,10 +149,15 @@ export default function HostGame({ code, questionSource, basePath, onExit, onLog
 
     if (room.status === "end") {
         if (!splashDone) return withDebug(<GameOverSplash onDone={() => setSplashDone(true)} />);
+        const tiebreaks = room.tiebreaks ?? [];
+        if (tiebreaks.length > 0 && !tiebreakDone) {
+            return withDebug(<TiebreakShow tiebreaks={tiebreaks} onDone={() => setTiebreakDone(true)} canSkip withSound />);
+        }
         const everyone = Object.values(room.players);
         return withDebug(
             <EndScreen
                 players={everyone}
+                tiebreaks={tiebreaks}
                 actions={
                     <EndActions
                         players={everyone.length}
@@ -155,6 +175,8 @@ export default function HostGame({ code, questionSource, basePath, onExit, onLog
     const humans = Object.values(room.players).filter((p) => !p.bot).length;
     const gameMenu: MenuItem[] = [
         { label: "🐞 Modo debug", on: room.debug === true, onClick: () => toggleRoomDebug(code, room.debug !== true) },
+        // Debug only: try the ✊✋✌️ tie-break without playing for a tie (then 🏁 Terminar)
+        ...(room.debug ? [{ label: "🧪 Forzar empate (todos al máximo)", onClick: () => forceTie(code) }] : []),
         {
             label: "↩ Reiniciar juego",
             separatorBefore: true,

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import HowToPlay from "./HowToPlay";
-import { joinRoom } from "./roomService";
+import { joinRoom, ROOM_NOT_OPEN } from "./roomService";
 import { input, linkButton, primaryButton, Screen } from "./ui";
 
 type Props = {
@@ -25,7 +25,11 @@ export default function JoinScreen({ initialCode = "", onJoined, onBack }: Props
             onJoined(roomCode, player.id);
         } catch (err) {
             console.error("Could not join the room", err);
-            setError("Sala no encontrada. Revisa el código en la pantalla grande.");
+            setError(
+                err instanceof Error && err.message === ROOM_NOT_OPEN
+                    ? "El profe todavía está preparando el juego. Intenta en un momento."
+                    : "Sala no encontrada. Revisa el código en la pantalla grande."
+            );
             setBusy(false);
         }
     }

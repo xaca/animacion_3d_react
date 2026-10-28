@@ -22,13 +22,16 @@ export type RoomQuestion = {
     options: string[];
 };
 
-export type TopicInfo = { id: string; name: string; tagline: string };
+// custom: uploaded by the teacher from the app (📥 Subir tema), not seeded
+export type TopicInfo = { id: string; name: string; tagline: string; custom?: true };
 
 // Where the questions come from. The default reads `tingo_questions` (questionSource.ts);
 // passing another source (e.g. one reading Jeopardy's collection) needs no changes here.
+// `subscribeTopics` (optional): topics that can appear live, added after the fixed ones.
 export type QuestionSource = {
     topics: TopicInfo[];
     load(topic: string): Promise<TingoQuestionDoc[]>;
+    subscribeTopics?(cb: (topics: TopicInfo[]) => void): () => void;
 };
 
 // Individual players, no teams: the ball picks one person.
@@ -66,14 +69,26 @@ export function hasScores(players: TingoPlayer[]): boolean {
     return players.some((p) => p.score > 0);
 }
 
-// Strict ranking, no shared places (a single 1st, 2nd and 3rd on the podium):
-// score desc, then whoever reached that score in an earlier round, then name.
-export function rankPlayers(players: TingoPlayer[]): { player: TingoPlayer; place: number }[] {
-    const sorted = [...players].sort(
-        (a, b) =>
-            b.score - a.score ||
-            (a.scoredRound ?? Number.MAX_SAFE_INTEGER) - (b.scoredRound ?? Number.MAX_SAFE_INTEGER) ||
-            a.name.localeCompare(b.name)
-    );
-    return sorted.map((player, i) => ({ player, place: i + 1 }));
+// ✊✋✌️ tie-break for the podium (tiebreak.ts). Played ONCE inside the transaction that
+// ends the game and stored in the room, so every screen replays the same throws.
+export type Sign = "piedra" | "papel" | "tijera";
+export type Tiebreak = {
+    place: number; // the podium place this decided (1..3)
+    score: number; // the tied score
+    contenders: { id: string; name: string }[]; // names kept: someone may leave the podium screen
+    throws: Record<string, Sign>[]; // one entry per throw, signs of the players still in
+    winner: string; // player id
+};
+
+// Ranking: score desc; equal scores are ordered by the ✊✋✌️ tie-breaks when there are
+// any (only podium places get one), otherwise they SHARE the place — no hidden criteria.
+export function rankPlayers(players: TingoPlayer[], tiebreaks: Tiebreak[] = []): { player: TingoPlayer; place: number }[] {
+    const won = new Map(tiebreaks.map((t) => [t.winner, t.place]));
+    const key = (p: TingoPlayer) => won.get(p.id) ?? Number.MAX_SAFE_INTEGER;
+    const sorted = [...players].sort((a, b) => b.score - a.score || key(a) - key(b) || a.name.localeCompare(b.name));
+    return sorted.map((player) => {
+        // Same score and same tie-break key as the first of its group → same place
+        const first = sorted.findIndex((p) => p.score === player.score && key(p) === key(player));
+        return { player, place: first + 1 };
+    });
 }

@@ -15,6 +15,31 @@ responde una pregunta de selección múltiple. Puntaje individual, podio al fina
 - Datos propios en Firestore: `tingo_rooms/{code}` (salas) y `tingo_questions/{id}` (banco,
   sembrado por `npm run seed:tingo` desde `content/`). No comparte colecciones con Jeopardy.
 - Cero imports desde `src/Jeopardy`: todo lo reciclado está copiado y adaptado aquí.
+- **Flujo del profe**: `setup` (`HostSetup`: pasos libres 1·Tema → 2·Tiempos → 3·Preguntas → 4·Resumen,
+  código oculto, `joinRoom` lanza `ROOM_NOT_OPEN`) → **Abrir sala** (`openRoom`) → `lobby`
+  (QR + resumen; "⚙ Ajustes" = `backToSetup`, los jugadores siguen dentro) → juego.
+  "Nueva sala" copia los ajustes y abre directo el lobby.
+- **Subir temas desde la app** (📥 en el paso Tema o en el menú Profe de setup y lobby, `UploadTopicModal`):
+  JSON `{ name, tagline, questions: [{ question, answer, wrong[3], code? }] }` (5–400
+  preguntas; también acepta un JSON de Jeopardy con `categories`). Lo valida
+  `contentValidation.ts` (el mismo validador del seed) y `customTopics.ts` lo escribe en
+  `tingo_questions` con prefijo `custom-` + una tarjeta en `tingo_custom_topics`. Las
+  reglas solo dejan escribir `custom-` con forma válida: el banco sembrado sigue
+  bloqueado y no hay baile de reglas. `QuestionSource.subscribeTopics` + `useTopics()`
+  mezclan los temas fijos con los subidos en vivo.
+- **Podio y empates**: igual puntaje = empate. Si un empate toca el 1.º, 2.º o 3.º puesto,
+  `finishGame` (todo camino a `end` pasa por ahí) lo resuelve con piedra, papel o tijera
+  automático (`tiebreak.ts`) DENTRO de la transacción y guarda las jugadas en
+  `room.tiebreaks`; host y celulares reproducen la misma secuencia (`TiebreakShow`:
+  anuncio → cara a cara VS → "¡Piedra! ¡Papel! ¡Tijera!" palabra por palabra → jugadas
+  (la mano ganadora embiste, el perdedor se apaga) → ganador; el profe puede "Saltar ⏭") y
+  el podio lo resume. Máx. 6 rondas por puesto (la última es decisiva). Empates bajo el 3.º
+  se comparten. Con debug on, el menú del juego trae "🧪 Forzar empate" para probarlo.
+  Nadie mide tiempos en el celular (lección de Jeopardy).
+- **Prueba**: `npm run test:tingo` (`scripts/tingo-test.ts`) valida el contenido, revisa el
+  banco sembrado y juega partidas reales en salas desechables: setup por pasos, subida de
+  temas + reglas, y todas las reglas del juego (lectura, solo responde el elegido, puntos
+  una vez, sorteo justo, salir, fin, otra partida, nueva sala). Borra todo al final.
 
 ## ⚠️ TODO framework (leer antes de crear el tercer juego)
 

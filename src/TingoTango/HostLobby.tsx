@@ -1,29 +1,30 @@
 import gsap from "gsap";
-import { useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
 import { staggerIn } from "./anim";
 import { toggleRoomDebug } from "./debugSwitch";
 import JoinQr from "./JoinQr";
 import { MOTION } from "./motion";
 import ProfileMenu, { type MenuItem } from "./ProfileMenu";
-import { buildQueue } from "./questionSource";
+import { buildQueue, useTopics } from "./questionSource";
 import {
     addBot,
+    backToSetup,
     cleanRooms,
     listOldRooms,
     removeBots,
     questionCountOf,
-    setAnswerSeconds,
-    setQuestionCount,
-    setReadSeconds,
     setTopic,
     startGame,
     startProblem,
     type TingoRoom,
 } from "./roomService";
 import { unlockSound } from "./sound";
-import Tabs from "./Tabs";
-import { ANSWER_SECONDS_CHOICES, QUESTION_COUNT_CHOICES, READ_SECONDS_CHOICES, type QuestionSource } from "./types";
+import { TOPICS } from "./topics";
+import type { QuestionSource } from "./types";
 import { dotted, linkButton } from "./ui";
+
+// Downloaded only when the teacher opens "📥 Subir tema"
+const UploadTopicModal = lazy(() => import("./UploadTopicModal"));
 
 type Props = {
     room: TingoRoom;
@@ -33,11 +34,12 @@ type Props = {
     onLogout: () => void;
 };
 
-// Waiting room on the big screen: QR + code, the game settings inline (no separate setup
-// step — tingo only needs topic and two times) and the players arriving as cards.
+// Waiting room on the big screen: QR + code, a summary of the settings chosen in setup
+// (⚙ Ajustes goes back there) and the players arriving as cards.
 export default function HostLobby({ room, questionSource, basePath, onExit, onLogout }: Props) {
     const [starting, setStarting] = useState(false);
     const [error, setError] = useState("");
+    const [uploading, setUploading] = useState(false);
     const players = Object.values(room.players);
     const problem = startProblem(room);
     const debug = room.debug === true;
@@ -81,6 +83,9 @@ export default function HostLobby({ room, questionSource, basePath, onExit, onLo
     }
 
     const menu: MenuItem[] = [
+        { label: "⚙ Ajustes del juego", onClick: () => backToSetup(room.code) },
+        // Uploaded topics show up in ⚙ Ajustes (step 1 · Tema) right away
+        { label: "📥 Subir tema (JSON)", onClick: () => setUploading(true) },
         { label: "🧪 Agregar jugador de prueba", onClick: () => addBot(room.code) },
         ...(players.some((p) => p.bot) ? [{ label: "🧹 Quitar jugadores de prueba", onClick: () => removeBots(room.code) }] : []),
         { label: "🐞 Modo debug", on: debug, onClick: () => toggleRoomDebug(room.code, !debug), separatorBefore: true },
@@ -94,7 +99,8 @@ export default function HostLobby({ room, questionSource, basePath, onExit, onLo
         { label: "Cerrar sesión", onClick: onLogout },
     ];
 
-    const topic = questionSource.topics.find((t) => t.id === room.topic);
+    const topic = useTopics(questionSource).find((t) => t.id === room.topic);
+    const count = questionCountOf(room);
 
     // Entrance: header and panels drop in, player cards pop as they arrive
     const root = useRef<HTMLDivElement>(null);
@@ -126,51 +132,34 @@ export default function HostLobby({ room, questionSource, basePath, onExit, onLo
                         <JoinQr code={room.code} basePath={basePath} size={150} />
                     </div>
                     <div className="flex flex-col items-center gap-1 max-w-sm">
-                        <p className="text-base md:text-xl break-all">
-                            Entra a <b>{location.host}{basePath}/join</b>
+                        {/* Wraps only at the slash (never mid-word like "tingo/j·oin") */}
+                        <p className="text-base md:text-xl break-words">
+                            Entra a{" "}
+                            <b>
+                                {location.host}
+                                <wbr />
+                                {basePath}/join
+                            </b>
                         </p>
                         <p className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-[0.25em] bg-black/40 rounded-xl px-4 py-1">{room.code}</p>
                         <p className="text-sm opacity-80">con el código o escaneando el QR</p>
                     </div>
                 </div>
-                <div className="lb-item flex flex-col items-start gap-2 text-left">
-                    <div>
-                        <p className="text-sm opacity-70 mb-1">Tema</p>
-                        <Tabs
-                            label="Tema"
-                            items={questionSource.topics.map((t) => ({ value: t.id, label: t.name }))}
-                            value={room.topic}
-                            onChange={(id) => setTopic(room.code, id)}
-                        />
-                        {topic && <p className="text-xs opacity-60 mt-1 max-w-72">{topic.tagline}</p>}
-                    </div>
-                    <div>
-                        <p className="text-sm opacity-70 mb-1">Tiempo para leer</p>
-                        <Tabs
-                            label="Tiempo para leer"
-                            items={READ_SECONDS_CHOICES.map((s) => ({ value: s, label: `${s} s` }))}
-                            value={room.readSeconds}
-                            onChange={(s) => setReadSeconds(room.code, s)}
-                        />
-                    </div>
-                    <div>
-                        <p className="text-sm opacity-70 mb-1">Tiempo para responder</p>
-                        <Tabs
-                            label="Tiempo para responder"
-                            items={ANSWER_SECONDS_CHOICES.map((s) => ({ value: s, label: `${s} s` }))}
-                            value={room.answerSeconds}
-                            onChange={(s) => setAnswerSeconds(room.code, s)}
-                        />
-                    </div>
-                    <div>
-                        <p className="text-sm opacity-70 mb-1">Preguntas por partida</p>
-                        <Tabs
-                            label="Preguntas por partida"
-                            items={QUESTION_COUNT_CHOICES.map((n) => ({ value: n, label: n === 0 ? "Todas" : `${n}` }))}
-                            value={questionCountOf(room)}
-                            onChange={(n) => setQuestionCount(room.code, n)}
-                        />
-                    </div>
+                {/* Settings live in setup; this card only recaps them */}
+                <div className="lb-item bg-slate-800 rounded-2xl p-4 shadow-xl flex flex-col items-start gap-1 text-left max-w-sm">
+                    <p className="text-sm opacity-70">Tema</p>
+                    <p className="text-2xl font-bold leading-tight">{topic?.name ?? "Tema no encontrado"}</p>
+                    {topic?.tagline && <p className="text-xs opacity-60">{topic.tagline}</p>}
+                    <p className="mt-2 opacity-90">
+                        {count === 0 ? "Todas las preguntas" : `${count} preguntas`} · {room.readSeconds} s para leer + {room.answerSeconds} s para responder
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => backToSetup(room.code)}
+                        className="mt-2 bg-white/10 hover:bg-white/20 rounded-lg px-3 py-1.5 font-bold cursor-pointer"
+                    >
+                        ⚙ Ajustes
+                    </button>
                 </div>
             </section>
 
@@ -189,8 +178,8 @@ export default function HostLobby({ room, questionSource, basePath, onExit, onLo
             {/* Sticky: even when the page scrolls, Start never leaves the screen */}
             <footer className="sticky bottom-0 z-30 shrink-0 -mx-3 md:-mx-4 px-3 md:px-4 py-2 bg-slate-900/90 backdrop-blur border-t border-white/10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                 <p className="hidden sm:block bg-black/30 rounded-full px-4 py-1.5 text-xs md:text-sm opacity-90">
-                    {questionCountOf(room) === 0 ? "Todas las preguntas" : `${questionCountOf(room)} preguntas`} · {room.readSeconds} s para leer +{" "}
-                    {room.answerSeconds} s para responder · nadie repite hasta que todos pasen
+                    {count === 0 ? "Todas las preguntas" : `${count} preguntas`} · {room.readSeconds} s para leer + {room.answerSeconds} s para responder ·
+                    nadie repite hasta que todos pasen
                 </p>
                 <div className="flex-1 min-w-40 text-center">
                     {problem && players.length === 0 && <p className="text-yellow-300 text-sm">{problem}</p>}
@@ -203,6 +192,15 @@ export default function HostLobby({ room, questionSource, basePath, onExit, onLo
                     </button>
                 </div>
             </footer>
+            {uploading && (
+                <Suspense fallback={null}>
+                    <UploadTopicModal
+                        onClose={() => setUploading(false)}
+                        // The room pointed at the topic just deleted: back to the first seeded one
+                        onDeleted={(id) => id === room.topic && setTopic(room.code, TOPICS[0].id)}
+                    />
+                </Suspense>
+            )}
         </div>
     );
 }

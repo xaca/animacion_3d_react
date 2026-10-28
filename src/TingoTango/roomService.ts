@@ -2,8 +2,9 @@ import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, runTransaction
 import { db } from "../lib/firebase";
 import { isLogging, logEvent, setStatus } from "./debug";
 import { clearDebugReports } from "./debugReports";
+import { resolveTies } from "./tiebreak";
 import { TOPICS } from "./topics";
-import type { RoomQuestion, TingoPlayer } from "./types";
+import type { RoomQuestion, Tiebreak, TingoPlayer } from "./types";
 import { pickOne, POINTS, QUESTION_COUNT_CHOICES, READ_SECONDS_CHOICES, ANSWER_SECONDS_CHOICES } from "./types";
 
 // ⚠️ TODO framework: this file is the SECOND copy of the Firestore room pattern born in
@@ -12,9 +13,10 @@ import { pickOne, POINTS, QUESTION_COUNT_CHOICES, READ_SECONDS_CHOICES, ANSWER_S
 // Before copying it a third time for a new game, extract the generic half to
 // src/lib/gameRoom/ and make Jeopardy and TingoTango consume it. See README.md.
 
-// lobby: players join, host configures. tingo: the ball is jumping (host screen only).
-// tango: it stopped on someone, question open. end: podium.
-export type TingoStatus = "lobby" | "tingo" | "tango" | "end";
+// setup: host configures, code hidden, joins rejected. lobby: players join.
+// tingo: the ball is jumping (host screen only). tango: it stopped on someone,
+// question open. end: podium.
+export type TingoStatus = "setup" | "lobby" | "tingo" | "tango" | "end";
 
 // Build id (ms timestamp as a string). "dev" when not built by Vite (scripts).
 export const APP_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "dev";
@@ -24,7 +26,7 @@ export type TingoRoom = {
     code: string;
     version: string; // APP_VERSION of the host that created the room
     status: TingoStatus;
-    topic: string; // TOPICS id; the queue is built from its questions on start
+    topic: string; // TOPICS id or an uploaded `custom-` one; the queue is built from its questions on start
     readSeconds: number; // question shown alone for this long before the options appear
     answerSeconds: number; // answer time, starts when the options appear
     players: Record<string, TingoPlayer>;
@@ -48,6 +50,7 @@ export type TingoRoom = {
     createdAt?: number; // epoch ms, for the old-rooms cleanup
     debug?: boolean; // teacher's debug switch: phones report to the debug console
     rev?: number; // +1 on every write (mutate); devices keep the copy with the highest rev
+    tiebreaks?: Tiebreak[]; // ✊✋✌️ podium tie-breaks, played by finishGame; only while status is end
 };
 
 const DEFAULT_READ_SECONDS = 5;
@@ -239,7 +242,7 @@ export async function createRoom(): Promise<string> {
         code,
         version: APP_VERSION,
         createdAt: Date.now(),
-        status: "lobby",
+        status: "setup",
         topic: TOPICS[0].id,
         readSeconds: DEFAULT_READ_SECONDS,
         answerSeconds: DEFAULT_ANSWER_SECONDS,
@@ -256,7 +259,7 @@ export async function createRoom(): Promise<string> {
         choice: null,
         hops: [],
         hopMs: HOP_MS,
-        questionCount: 10, // ~6-8 min per game; "Todas" (0) is a lobby choice
+        questionCount: 10, // ~6-8 min per game; "Todas" (0) is a setup choice
     });
     return code;
 }
@@ -293,6 +296,16 @@ export function startProblem(room: TingoRoom): string | null {
     return null;
 }
 
+// 🧪 Debug only (menu with debug mode on): everyone gets the top score, so ending the
+// game now shows the ✊✋✌️ tie-break without playing for it
+export async function forceTie(code: string) {
+    await mutate(code, (room) => {
+        if (room.status !== "tingo" && room.status !== "tango") return room;
+        const top = Math.max(POINTS, ...Object.values(room.players).map((p) => p.score));
+        return { ...room, players: Object.fromEntries(Object.entries(room.players).map(([id, p]) => [id, { ...p, score: top }])) };
+    });
+}
+
 // Test player for trying the game alone: the host screen answers for it when the ball
 // picks it (useBots). Lobby only, like joining the real game.
 export async function addBot(code: string) {
@@ -312,20 +325,36 @@ export async function removeBots(code: string) {
     }));
 }
 
+// Settings change only before the game (setup, or the lobby for old rooms)
+const configurable = (room: TingoRoom) => room.status === "setup" || room.status === "lobby";
+// Seeded topics, or one the teacher uploaded (its questions may be gone: Start says so)
+const knownTopic = (topic: string) => TOPICS.some((t) => t.id === topic) || topic.startsWith("custom-");
+
 export async function setTopic(code: string, topic: string) {
-    await mutate(code, (room) => (room.status === "lobby" ? { ...room, topic } : room));
+    await mutate(code, (room) => (configurable(room) && knownTopic(topic) ? { ...room, topic } : room));
 }
 
 export async function setReadSeconds(code: string, readSeconds: number) {
-    await mutate(code, (room) => (room.status === "lobby" ? { ...room, readSeconds } : room));
+    await mutate(code, (room) => (configurable(room) ? { ...room, readSeconds } : room));
 }
 
 export async function setAnswerSeconds(code: string, answerSeconds: number) {
-    await mutate(code, (room) => (room.status === "lobby" ? { ...room, answerSeconds } : room));
+    await mutate(code, (room) => (configurable(room) ? { ...room, answerSeconds } : room));
 }
 
 export async function setQuestionCount(code: string, questionCount: number) {
-    await mutate(code, (room) => (room.status === "lobby" ? { ...room, questionCount } : room));
+    await mutate(code, (room) => (configurable(room) ? { ...room, questionCount } : room));
+}
+
+// Setup done: the code and QR show up and phones can join
+export async function openRoom(code: string) {
+    await mutate(code, (room) => (room.status === "setup" ? { ...room, status: "lobby" as const } : room));
+}
+
+// "⚙ Ajustes" from the lobby: players already in stay (their phones show "get ready"),
+// new joins wait until the room opens again
+export async function backToSetup(code: string) {
+    await mutate(code, (room) => (room.status === "lobby" ? { ...room, status: "setup" as const } : room));
 }
 
 export type TingoSettings = { topic?: string; readSeconds?: number; answerSeconds?: number; questionCount?: number };
@@ -335,9 +364,9 @@ export type TingoSettings = { topic?: string; readSeconds?: number; answerSecond
 export async function applySettings(code: string, s: TingoSettings) {
     const ok = (v: number | undefined, choices: number[]): v is number => v !== undefined && choices.includes(v);
     await mutate(code, (room) => {
-        if (room.status !== "lobby") return room;
+        if (!configurable(room)) return room;
         const next = { ...room };
-        if (s.topic !== undefined && TOPICS.some((t) => t.id === s.topic)) next.topic = s.topic;
+        if (s.topic !== undefined && knownTopic(s.topic)) next.topic = s.topic;
         if (ok(s.readSeconds, READ_SECONDS_CHOICES)) next.readSeconds = s.readSeconds;
         if (ok(s.answerSeconds, ANSWER_SECONDS_CHOICES)) next.answerSeconds = s.answerSeconds;
         if (ok(s.questionCount, QUESTION_COUNT_CHOICES)) next.questionCount = s.questionCount;
@@ -366,6 +395,19 @@ const noQuestion = {
     choice: null,
 } as const;
 
+// Every way a game ends goes through here: podium ties are settled ✊✋✌️ right now, in
+// this transaction, so all screens replay the same throws
+function finishGame(room: TingoRoom): TingoRoom {
+    return { ...room, status: "end", ...noQuestion, tiebreaks: resolveTies(Object.values(room.players)) };
+}
+
+// A new game forgets the last podium's tie-breaks (never store undefined)
+function withoutTiebreaks(room: TingoRoom): TingoRoom {
+    const { tiebreaks: _drop, ...rest } = room;
+    void _drop;
+    return rest;
+}
+
 // Starts the game with a freshly built queue (the questions query can't run inside the
 // transaction, so the caller loads them first — see HostLobby). Scores reset, cycle clean.
 // The queue is trimmed to questionCount, so the game ends at the podium after N questions
@@ -377,7 +419,7 @@ export async function startGame(code: string, queue: RoomQuestion[]) {
         if (problem) throw new Error(problem);
         const count = questionCountOf(room);
         return {
-            ...room,
+            ...withoutTiebreaks(room),
             status: "tingo" as const,
             queue: count > 0 ? queue.slice(0, count) : queue,
             round: 0,
@@ -398,7 +440,7 @@ export async function stopTango(code: string) {
         mutate(code, (room) => {
             if (room.status !== "tingo") return room;
             const ids = Object.keys(room.players);
-            if (ids.length === 0 || room.queue.length === 0) return { ...room, status: "end" as const, ...noQuestion };
+            if (ids.length === 0 || room.queue.length === 0) return finishGame(room);
             const fresh = ids.filter((id) => !room.playedIds.includes(id));
             const pool = fresh.length > 0 ? fresh : ids; // everyone played: new cycle
             const selectedId = pickOne(pool);
@@ -461,12 +503,8 @@ export async function nextRound(code: string) {
     await mutate(code, (room) => {
         if (room.status !== "tango" || !room.revealed) return room;
         const done = room.queue.length === 0 || Object.keys(room.players).length === 0;
-        return {
-            ...room,
-            status: done ? ("end" as const) : ("tingo" as const),
-            hops: done ? [] : buildHops(Object.keys(room.players)),
-            ...noQuestion,
-        };
+        if (done) return finishGame({ ...room, hops: [] });
+        return { ...room, status: "tingo" as const, hops: buildHops(Object.keys(room.players)), ...noQuestion };
     });
 }
 
@@ -474,7 +512,7 @@ export async function nextRound(code: string) {
 export async function endGame(code: string) {
     await mutate(code, (room) => {
         if (room.status !== "tingo" && room.status !== "tango") return room;
-        return { ...room, status: "end" as const, ...noQuestion };
+        return finishGame(room);
     });
 }
 
@@ -482,7 +520,7 @@ export async function endGame(code: string) {
 // Serves both "↩ Reiniciar" mid-game and "🔁 Otra partida" after the podium.
 export async function backToLobby(code: string) {
     await mutate(code, (room) => ({
-        ...room,
+        ...withoutTiebreaks(room),
         status: "lobby" as const,
         round: 0,
         playedIds: [],
@@ -494,9 +532,16 @@ export async function backToLobby(code: string) {
 
 // ----- Player actions ------------------------------------------------------
 
+export const ROOM_NOT_OPEN = "Room not open yet";
+
+// Rejected while the host is still in setup (the code is hidden then, but a returning
+// phone could still try): JoinScreen tells them to wait
 export async function joinRoom(code: string, name: string): Promise<TingoPlayer> {
     const player: TingoPlayer = { id: randomId(10), name, score: 0 };
-    await mutate(code, (room) => ({ ...room, players: { ...room.players, [player.id]: player } }));
+    await mutate(code, (room) => {
+        if (room.status === "setup") throw new Error(ROOM_NOT_OPEN);
+        return { ...room, players: { ...room.players, [player.id]: player } };
+    });
     return player;
 }
 
@@ -513,7 +558,7 @@ export async function leaveRoom(code: string, playerId: string) {
             next = { ...next, revealed: true };
         }
         if (Object.keys(players).length === 0 && (room.status === "tingo" || room.status === "tango")) {
-            next = { ...next, status: "end", ...noQuestion };
+            next = finishGame(next);
         }
         return next;
     });
